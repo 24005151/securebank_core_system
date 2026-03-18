@@ -59,6 +59,7 @@ function renderCustomers(customers) {
             <p class="customer-meta"><strong>Status:</strong> ${customer.is_active ? "Active" : "Inactive"}</p>
             <div class="customer-actions">
                 ${customer.is_active ? `<button class="danger-btn" onclick="deactivateCustomer(${customer.id})">Deactivate</button>` : ""}
+                <button class="danger-btn" onclick="deleteCustomer(${customer.id})">Delete</button>
             </div>
         </div>
     `).join("");
@@ -330,6 +331,24 @@ async function deactivateCustomer(customerId) {
     }
 }
 
+async function deleteCustomer(customerId) {
+    const confirmed = confirm("Delete this customer record?");
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(`/api/customers/${customerId}`, {
+            method: "DELETE"
+        });
+
+        await handleJsonResponse(response);
+        showMessage("Customer deleted successfully.");
+        fetchCustomers();
+        fetchAuditLogs();
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+}
+
 refreshBtn?.addEventListener("click", fetchCustomers);
 searchCustomersBtn?.addEventListener("click", fetchCustomers);
 refreshTransactionsBtn?.addEventListener("click", fetchTransactions);
@@ -347,3 +366,4 @@ if (auditList) {
 }
 
 window.deactivateCustomer = deactivateCustomer;
+window.deleteCustomer = deleteCustomer;

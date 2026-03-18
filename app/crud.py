@@ -1,7 +1,18 @@
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from passlib.context import CryptContext
 
 from app import models, schemas
+
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_audit_log(db: Session, event_type: str, actor: str, details: str):
@@ -24,7 +35,7 @@ def seed_default_staff_user(db: Session):
     if not existing:
         user = models.StaffUser(
             username="admin",
-            password="admin123",
+            password=hash_password("admin123"),
             role="manager"
         )
         db.add(user)
@@ -32,10 +43,17 @@ def seed_default_staff_user(db: Session):
 
 
 def authenticate_staff_user(db: Session, username: str, password: str):
-    return db.query(models.StaffUser).filter(
-        models.StaffUser.username == username.strip(),
-        models.StaffUser.password == password
+    user = db.query(models.StaffUser).filter(
+        models.StaffUser.username == username.strip()
     ).first()
+
+    if not user:
+        return None
+
+    if not verify_password(password, user.password):
+        return None
+
+    return user
 
 
 def get_all_customers(db: Session, search: str | None = None):
@@ -108,6 +126,26 @@ def deactivate_customer(db: Session, customer_id: int, actor: str):
         f"Deactivated customer {customer.full_name} ({customer.account_number})"
     )
     return customer, None
+
+
+def delete_customer(db: Session, customer_id: int, actor: str):
+    customer = get_customer_by_id(db, customer_id)
+    if not customer:
+        return False, "Customer not found."
+
+    account_number = customer.account_number
+    full_name = customer.full_name
+
+    db.delete(customer)
+    db.commit()
+
+    create_audit_log(
+        db,
+        "customer_delete",
+        actor,
+        f"Deleted customer {full_name} ({account_number})"
+    )
+    return True, None
 
 
 def get_all_transactions(

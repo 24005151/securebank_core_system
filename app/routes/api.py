@@ -24,6 +24,15 @@ def read_customers(
     return crud.get_all_customers(db, search=search)
 
 
+@router.get("/api/customers/{customer_id}", response_model=schemas.CustomerResponse)
+def read_customer_by_id(customer_id: int, request: Request, db: Session = Depends(get_db)):
+    require_login(request)
+    customer = crud.get_customer_by_id(db, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found.")
+    return customer
+
+
 @router.post("/api/customers", response_model=schemas.CustomerResponse)
 def create_new_customer(
     request: Request,
@@ -52,6 +61,15 @@ def deactivate_customer(customer_id: int, request: Request, db: Session = Depend
     if error:
         raise HTTPException(status_code=400, detail=error)
     return customer
+
+
+@router.delete("/api/customers/{customer_id}")
+def delete_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
+    user = require_login(request)
+    success, error = crud.delete_customer(db, customer_id, actor=user["username"])
+    if not success:
+        raise HTTPException(status_code=404, detail=error)
+    return {"message": "Customer deleted successfully."}
 
 
 @router.get("/api/transactions", response_model=list[schemas.TransactionResponse])
