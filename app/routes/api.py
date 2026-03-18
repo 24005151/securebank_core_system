@@ -14,6 +14,13 @@ def require_login(request: Request):
     return user
 
 
+def require_manager(request: Request):
+    user = require_login(request)
+    if user.get("role") != "manager":
+        raise HTTPException(status_code=403, detail="Manager access required.")
+    return user
+
+
 @router.get("/api/dashboard-summary", response_model=schemas.DashboardSummaryResponse)
 def read_dashboard_summary(request: Request, db: Session = Depends(get_db)):
     require_login(request)
@@ -51,12 +58,6 @@ def create_new_customer(
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already exists.")
 
-    existing_account = crud.get_customer_by_account_number(
-        db, customer.account_number.strip()
-    )
-    if existing_account:
-        raise HTTPException(status_code=400, detail="Account number already exists.")
-
     return crud.create_customer(db, customer, actor=user["username"])
 
 
@@ -67,7 +68,7 @@ def update_customer(
     payload: schemas.CustomerUpdate,
     db: Session = Depends(get_db)
 ):
-    user = require_login(request)
+    user = require_manager(request)
     customer, error = crud.update_customer(db, customer_id, payload, actor=user["username"])
     if error:
         raise HTTPException(status_code=400, detail=error)
@@ -76,7 +77,7 @@ def update_customer(
 
 @router.patch("/api/customers/{customer_id}/deactivate", response_model=schemas.CustomerResponse)
 def deactivate_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
-    user = require_login(request)
+    user = require_manager(request)
     customer, error = crud.deactivate_customer(db, customer_id, actor=user["username"])
     if error:
         raise HTTPException(status_code=400, detail=error)
@@ -85,7 +86,7 @@ def deactivate_customer(customer_id: int, request: Request, db: Session = Depend
 
 @router.delete("/api/customers/{customer_id}")
 def delete_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
-    user = require_login(request)
+    user = require_manager(request)
     success, error = crud.delete_customer(db, customer_id, actor=user["username"])
     if not success:
         raise HTTPException(status_code=404, detail=error)
@@ -136,5 +137,5 @@ def transfer(request: Request, payload: schemas.TransferRequest, db: Session = D
 
 @router.get("/api/audit-logs", response_model=list[schemas.AuditLogResponse])
 def read_audit_logs(request: Request, db: Session = Depends(get_db)):
-    require_login(request)
+    require_manager(request)
     return crud.get_all_audit_logs(db)

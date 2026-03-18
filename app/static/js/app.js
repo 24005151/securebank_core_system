@@ -29,6 +29,7 @@ const modalConfirm = document.getElementById("modal-confirm");
 const modalCancel = document.getElementById("modal-cancel");
 
 let confirmAction = null;
+window.currentUserRole = "staff";
 
 function showMessage(message, isError = false) {
     if (!messageBox) return;
@@ -85,6 +86,7 @@ modalConfirm?.addEventListener("click", async () => {
 });
 
 modalCancel?.addEventListener("click", closeConfirmModal);
+
 confirmModal?.addEventListener("click", (event) => {
     if (event.target === confirmModal) {
         closeConfirmModal();
@@ -120,11 +122,21 @@ function renderDashboardSummary(summary) {
     const barTotalTransactions = document.getElementById("bar-total-transactions");
     const barTotalBalance = document.getElementById("bar-total-balance");
 
-    if (barTotalCustomers) barTotalCustomers.style.width = safePercent(totalCustomers, Math.max(totalCustomers, 10));
-    if (barActiveCustomers) barActiveCustomers.style.width = safePercent(summary.active_customers, totalCustomers || 1);
-    if (barInactiveCustomers) barInactiveCustomers.style.width = safePercent(summary.inactive_customers, totalCustomers || 1);
-    if (barTotalTransactions) barTotalTransactions.style.width = safePercent(totalTransactions, Math.max(totalTransactions, 10));
-    if (barTotalBalance) barTotalBalance.style.width = safePercent(totalBalance, Math.max(totalBalance, 1000));
+    if (barTotalCustomers) {
+        barTotalCustomers.style.width = safePercent(totalCustomers, Math.max(totalCustomers, 10));
+    }
+    if (barActiveCustomers) {
+        barActiveCustomers.style.width = safePercent(summary.active_customers, totalCustomers || 1);
+    }
+    if (barInactiveCustomers) {
+        barInactiveCustomers.style.width = safePercent(summary.inactive_customers, totalCustomers || 1);
+    }
+    if (barTotalTransactions) {
+        barTotalTransactions.style.width = safePercent(totalTransactions, Math.max(totalTransactions, 10));
+    }
+    if (barTotalBalance) {
+        barTotalBalance.style.width = safePercent(totalBalance, Math.max(totalBalance, 1000));
+    }
 }
 
 function renderCustomers(customers) {
@@ -134,6 +146,8 @@ function renderCustomers(customers) {
         customerList.innerHTML = `<div class="customer-item"><p class="muted-text">No customer records found.</p></div>`;
         return;
     }
+
+    const managerActions = window.currentUserRole === "manager";
 
     customerList.innerHTML = customers.map((customer) => `
         <div class="customer-item ${customer.is_active ? "" : "inactive"}">
@@ -148,9 +162,9 @@ function renderCustomers(customers) {
             </p>
             <div class="customer-actions">
                 <button onclick="viewCustomer(${customer.id})">View</button>
-                <button onclick="loadCustomerIntoEditForm(${customer.id}, ${JSON.stringify(customer.full_name)}, ${JSON.stringify(customer.email)})">Edit</button>
-                ${customer.is_active ? `<button class="danger-btn" onclick="deactivateCustomer(${customer.id})">Deactivate</button>` : ""}
-                <button class="danger-btn" onclick="deleteCustomer(${customer.id})">Delete</button>
+                ${managerActions ? `<button onclick="loadCustomerIntoEditForm(${customer.id}, ${JSON.stringify(customer.full_name)}, ${JSON.stringify(customer.email)})">Edit</button>` : ""}
+                ${managerActions && customer.is_active ? `<button class="danger-btn" onclick="deactivateCustomer(${customer.id})">Deactivate</button>` : ""}
+                ${managerActions ? `<button class="danger-btn" onclick="deleteCustomer(${customer.id})">Delete</button>` : ""}
             </div>
         </div>
     `).join("");
@@ -247,6 +261,16 @@ async function handleJsonResponse(response) {
     return data;
 }
 
+async function fetchCurrentUser() {
+    try {
+        const response = await fetch("/api/auth/me");
+        const user = await handleJsonResponse(response);
+        window.currentUserRole = user.role || "staff";
+    } catch (error) {
+        window.currentUserRole = "staff";
+    }
+}
+
 async function fetchDashboardSummary() {
     try {
         const response = await fetch("/api/dashboard-summary");
@@ -305,7 +329,14 @@ async function fetchAuditLogs() {
         const logs = await handleJsonResponse(response);
         renderAuditLogs(logs);
     } catch (error) {
-        showMessage(error.message, true);
+        if (window.currentUserRole === "manager") {
+            showMessage(error.message, true);
+        } else if (auditList) {
+            auditList.innerHTML = `<div class="audit-item"><p class="muted-text">Audit log is restricted to manager accounts.</p></div>`;
+        }
+        if (recentActivityPanel && window.currentUserRole !== "manager") {
+            recentActivityPanel.innerHTML = `<p class="muted-text">Recent audit activity is available to manager accounts only.</p>`;
+        }
     }
 }
 
@@ -314,11 +345,10 @@ customerForm?.addEventListener("submit", async (event) => {
 
     const full_name = document.getElementById("full_name").value.trim();
     const email = document.getElementById("email").value.trim();
-    const account_number = document.getElementById("account_number").value.trim();
     const balance = parseInt(document.getElementById("balance").value, 10);
 
-    if (!full_name || !email || !account_number || Number.isNaN(balance)) {
-        showMessage("All customer fields are required.", true);
+    if (!full_name || !email || Number.isNaN(balance)) {
+        showMessage("Full name, email, and opening balance are required.", true);
         return;
     }
 
@@ -326,13 +356,13 @@ customerForm?.addEventListener("submit", async (event) => {
         const response = await fetch("/api/customers", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ full_name, email, account_number, balance })
+            body: JSON.stringify({ full_name, email, balance })
         });
 
-        await handleJsonResponse(response);
+        const createdCustomer = await handleJsonResponse(response);
         customerForm.reset();
         document.getElementById("balance").value = 0;
-        showMessage("Customer created successfully.");
+        showMessage(`Customer created successfully. Account Number: ${createdCustomer.account_number}`);
         fetchCustomers();
         fetchAuditLogs();
         fetchDashboardSummary();
@@ -473,8 +503,9 @@ loginForm?.addEventListener("submit", async (event) => {
             body: JSON.stringify({ username, password })
         });
 
-        await handleJsonResponse(response);
-        showLoginMessage("Login successful.");
+        const data = await handleJsonResponse(response);
+        window.currentUserRole = data.role || "staff";
+        showLoginMessage(`Login successful. Role: ${window.currentUserRole}`);
         setTimeout(() => {
             window.location.href = "/";
         }, 500);
@@ -568,16 +599,22 @@ refreshTransactionsBtn?.addEventListener("click", fetchTransactions);
 filterTransactionsBtn?.addEventListener("click", fetchTransactions);
 refreshAuditBtn?.addEventListener("click", fetchAuditLogs);
 
-if (customerList) {
-    fetchDashboardSummary();
-    fetchCustomers();
-}
-if (transactionList) {
-    fetchTransactions();
-}
-if (auditList) {
-    fetchAuditLogs();
-}
+(async () => {
+    if (customerList || transactionList || auditList) {
+        await fetchCurrentUser();
+    }
+
+    if (customerList) {
+        fetchDashboardSummary();
+        fetchCustomers();
+    }
+    if (transactionList) {
+        fetchTransactions();
+    }
+    if (auditList) {
+        fetchAuditLogs();
+    }
+})();
 
 window.deactivateCustomer = deactivateCustomer;
 window.deleteCustomer = deleteCustomer;

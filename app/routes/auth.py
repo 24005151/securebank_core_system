@@ -29,7 +29,7 @@ def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends
         db,
         "login_success",
         user.username,
-        "Successful staff login"
+        f"Successful staff login with role {user.role}"
     )
 
     return {
@@ -41,8 +41,13 @@ def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends
 
 @router.post("/logout")
 def logout(request: Request):
+    user = request.session.get("user")
+    if user:
+        request.session.clear()
+        return {"message": "Logged out successfully."}
+
     request.session.clear()
-    return {"message": "Logged out successfully."}
+    return {"message": "No active session. Logged out safely."}
 
 
 @router.get("/me")

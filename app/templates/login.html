@@ -1,47 +1,57 @@
 {% extends "base.html" %}
 
 {% block title %}Staff Login - SecureBank Core System{% endblock %}
+{% block page_title %}Staff Login{% endblock %}
 
 {% block content %}
-<section class="login-wrapper">
-    <div class="login-panel">
-        <div class="card small-card hero-card">
-            <div class="hero-badge">Secure Staff Access</div>
-            <h2>Staff Login</h2>
-            <p class="muted-text">
-                Sign in to access customer records, transaction processing, and audit monitoring.
-            </p>
-
-            <form id="login-form">
-                <div class="form-group">
-                    <label for="login-username">Username</label>
-                    <input type="text" id="login-username" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="login-password">Password</label>
-                    <input type="password" id="login-password" required>
-                </div>
-
-                <button type="submit" class="primary-btn full-width-btn">Login</button>
-            </form>
-
-            <p id="login-message" class="status-message"></p>
+<section class="dashboard-grid">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Secure Staff Access</h3>
+            <span class="panel-badge">Authentication</span>
         </div>
 
-        <div class="card small-card side-info-card">
-            <h3>Demo Access</h3>
-            <p><strong>Username:</strong> admin</p>
-            <p><strong>Password:</strong> admin123</p>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="login-username">Username</label>
+                <input type="text" id="login-username" required>
+            </div>
+
+            <div class="form-group">
+                <label for="login-password">Password</label>
+                <input type="password" id="login-password" required>
+            </div>
+
+            <button type="submit" class="primary-btn">Login</button>
+        </form>
+
+        <p id="login-message" class="status-message"></p>
+    </div>
+
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Demo Accounts</h3>
+            <span class="panel-badge">Role Access</span>
         </div>
 
-        <div class="card small-card side-info-card">
-            <h3>Privacy Notice</h3>
-            <p>
-                This prototype stores limited customer data for assignment purposes only,
-                including name, email, account number, and balance. Access is restricted
-                to authenticated staff users.
-            </p>
+        <div class="activity-item">
+            <div class="activity-title">Manager</div>
+            <div class="muted-text">Username: admin</div>
+            <div class="muted-text">Password: admin123</div>
+        </div>
+
+        <div class="activity-item">
+            <div class="activity-title">Staff</div>
+            <div class="muted-text">Username: staff1</div>
+            <div class="muted-text">Password: staff123</div>
+        </div>
+
+        <div class="activity-item">
+            <div class="activity-title">Privacy Notice</div>
+            <div class="muted-text">
+                This prototype stores limited customer data for assignment purposes only.
+                Access is restricted by authenticated staff role.
+            </div>
         </div>
     </div>
 </section>

@@ -65,13 +65,15 @@
             </div>
 
             <div class="form-group">
-                <label for="account_number">Account Number</label>
-                <input type="text" id="account_number" maxlength="20" required>
-            </div>
-
-            <div class="form-group">
                 <label for="balance">Opening Balance</label>
                 <input type="number" id="balance" min="0" value="0" required>
+            </div>
+
+            <div class="activity-item">
+                <div class="activity-title">Account Number Generation</div>
+                <div class="muted-text">
+                    A unique free account number is generated automatically when a new customer is created.
+                </div>
             </div>
 
             <button type="submit" class="primary-btn">Create Customer</button>
@@ -142,6 +144,13 @@
         </form>
 
         <p id="edit-message" class="status-message"></p>
+
+        <div class="activity-item">
+            <div class="activity-title">Role Access</div>
+            <div class="muted-text">
+                Editing, deactivating, deleting customers, and viewing audit logs are manager-only actions.
+            </div>
+        </div>
     </div>
 </section>
 

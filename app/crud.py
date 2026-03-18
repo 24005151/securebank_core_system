@@ -1,3 +1,5 @@
+import random
+
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
@@ -28,17 +30,30 @@ def create_audit_log(db: Session, event_type: str, actor: str, details: str):
 
 
 def seed_default_staff_user(db: Session):
-    existing = db.query(models.StaffUser).filter(
+    existing_admin = db.query(models.StaffUser).filter(
         models.StaffUser.username == "admin"
     ).first()
 
-    if not existing:
-        user = models.StaffUser(
+    if not existing_admin:
+        admin = models.StaffUser(
             username="admin",
             password=hash_password("admin123"),
             role="manager"
         )
-        db.add(user)
+        db.add(admin)
+        db.commit()
+
+    existing_staff = db.query(models.StaffUser).filter(
+        models.StaffUser.username == "staff1"
+    ).first()
+
+    if not existing_staff:
+        staff = models.StaffUser(
+            username="staff1",
+            password=hash_password("staff123"),
+            role="staff"
+        )
+        db.add(staff)
         db.commit()
 
 
@@ -54,6 +69,14 @@ def authenticate_staff_user(db: Session, username: str, password: str):
         return None
 
     return user
+
+
+def generate_unique_account_number(db: Session) -> str:
+    while True:
+        account_number = f"SB{random.randint(10000000, 99999999)}"
+        existing = get_customer_by_account_number(db, account_number)
+        if not existing:
+            return account_number
 
 
 def get_dashboard_summary(db: Session):
@@ -110,7 +133,7 @@ def create_customer(db: Session, customer: schemas.CustomerCreate, actor: str):
     db_customer = models.Customer(
         full_name=customer.full_name.strip(),
         email=customer.email.strip().lower(),
-        account_number=customer.account_number.strip(),
+        account_number=generate_unique_account_number(db),
         balance=customer.balance,
         is_active=True
     )
