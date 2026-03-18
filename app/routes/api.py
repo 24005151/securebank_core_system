@@ -84,6 +84,15 @@ def deactivate_customer(customer_id: int, request: Request, db: Session = Depend
     return customer
 
 
+@router.patch("/api/customers/{customer_id}/reactivate", response_model=schemas.CustomerResponse)
+def reactivate_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
+    user = require_manager(request)
+    customer, error = crud.reactivate_customer(db, customer_id, actor=user["username"])
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return customer
+
+
 @router.delete("/api/customers/{customer_id}")
 def delete_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
     user = require_manager(request)

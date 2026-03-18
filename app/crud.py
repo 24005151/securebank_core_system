@@ -57,6 +57,82 @@ def seed_default_staff_user(db: Session):
         db.commit()
 
 
+def generate_unique_account_number(db: Session) -> str:
+    while True:
+        account_number = f"SB{random.randint(10000000, 99999999)}"
+        existing = get_customer_by_account_number(db, account_number)
+        if not existing:
+            return account_number
+
+
+def seed_demo_customers_bulk(db: Session):
+    existing_count = db.query(func.count(models.Customer.id)).scalar() or 0
+    if existing_count > 0:
+        return
+
+    demo_customers = [
+        {"full_name": "Alice Johnson", "email": "alice.johnson@example.com", "balance": 2500, "is_active": True},
+        {"full_name": "Michael Smith", "email": "michael.smith@example.com", "balance": 1800, "is_active": True},
+        {"full_name": "Sarah Williams", "email": "sarah.williams@example.com", "balance": 3200, "is_active": True},
+        {"full_name": "Daniel Brown", "email": "daniel.brown@example.com", "balance": 900, "is_active": False},
+        {"full_name": "Emma Taylor", "email": "emma.taylor@example.com", "balance": 4100, "is_active": True},
+        {"full_name": "James Wilson", "email": "james.wilson@example.com", "balance": 1500, "is_active": True},
+        {"full_name": "Olivia Thomas", "email": "olivia.thomas@example.com", "balance": 2750, "is_active": True},
+        {"full_name": "Benjamin White", "email": "benjamin.white@example.com", "balance": 600, "is_active": False},
+        {"full_name": "Sophia Harris", "email": "sophia.harris@example.com", "balance": 5200, "is_active": True},
+        {"full_name": "William Martin", "email": "william.martin@example.com", "balance": 1100, "is_active": True},
+        {"full_name": "Grace Walker", "email": "grace.walker@example.com", "balance": 3400, "is_active": True},
+        {"full_name": "Henry Hall", "email": "henry.hall@example.com", "balance": 1250, "is_active": True},
+        {"full_name": "Chloe Allen", "email": "chloe.allen@example.com", "balance": 2875, "is_active": False},
+        {"full_name": "Jack Young", "email": "jack.young@example.com", "balance": 950, "is_active": True},
+        {"full_name": "Lily King", "email": "lily.king@example.com", "balance": 4680, "is_active": True},
+    ]
+
+    created_customers = []
+
+    for item in demo_customers:
+        customer = models.Customer(
+            full_name=item["full_name"],
+            email=item["email"],
+            account_number=generate_unique_account_number(db),
+            balance=item["balance"],
+            is_active=item["is_active"]
+        )
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+        created_customers.append(customer)
+
+    if len(created_customers) >= 8:
+        demo_transactions = [
+            models.Transaction(transaction_type="deposit", amount=500, description="Initial demo deposit", to_customer_id=created_customers[0].id),
+            models.Transaction(transaction_type="withdraw", amount=150, description="Demo cash withdrawal", from_customer_id=created_customers[1].id),
+            models.Transaction(transaction_type="transfer", amount=200, description="Demo transfer 1", from_customer_id=created_customers[2].id, to_customer_id=created_customers[3].id),
+            models.Transaction(transaction_type="deposit", amount=750, description="Salary top-up demo", to_customer_id=created_customers[4].id),
+            models.Transaction(transaction_type="transfer", amount=300, description="Demo transfer 2", from_customer_id=created_customers[5].id, to_customer_id=created_customers[6].id),
+            models.Transaction(transaction_type="withdraw", amount=100, description="ATM withdrawal demo", from_customer_id=created_customers[7].id),
+        ]
+
+        created_customers[0].balance += 500
+        created_customers[1].balance -= 150
+        created_customers[2].balance -= 200
+        created_customers[3].balance += 200
+        created_customers[4].balance += 750
+        created_customers[5].balance -= 300
+        created_customers[6].balance += 300
+        created_customers[7].balance -= 100
+
+        db.add_all(demo_transactions)
+        db.commit()
+
+    create_audit_log(
+        db,
+        "demo_seed_bulk",
+        "system",
+        "Seeded bulk demo customers and transactions"
+    )
+
+
 def authenticate_staff_user(db: Session, username: str, password: str):
     user = db.query(models.StaffUser).filter(
         models.StaffUser.username == username.strip()
@@ -69,14 +145,6 @@ def authenticate_staff_user(db: Session, username: str, password: str):
         return None
 
     return user
-
-
-def generate_unique_account_number(db: Session) -> str:
-    while True:
-        account_number = f"SB{random.randint(10000000, 99999999)}"
-        existing = get_customer_by_account_number(db, account_number)
-        if not existing:
-            return account_number
 
 
 def get_dashboard_summary(db: Session):
@@ -194,6 +262,27 @@ def deactivate_customer(db: Session, customer_id: int, actor: str):
         "customer_deactivate",
         actor,
         f"Deactivated customer {customer.full_name} ({customer.account_number})"
+    )
+    return customer, None
+
+
+def reactivate_customer(db: Session, customer_id: int, actor: str):
+    customer = get_customer_by_id(db, customer_id)
+    if not customer:
+        return None, "Customer not found."
+
+    if customer.is_active:
+        return None, "Customer is already active."
+
+    customer.is_active = True
+    db.commit()
+    db.refresh(customer)
+
+    create_audit_log(
+        db,
+        "customer_reactivate",
+        actor,
+        f"Reactivated customer {customer.full_name} ({customer.account_number})"
     )
     return customer, None
 

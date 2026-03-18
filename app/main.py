@@ -11,6 +11,7 @@ Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 try:
     crud.seed_default_staff_user(db)
+    crud.seed_demo_customers_bulk(db)
 finally:
     db.close()
 

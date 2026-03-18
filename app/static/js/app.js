@@ -156,15 +156,16 @@ function renderCustomers(customers) {
             <p class="customer-meta"><strong>Email:</strong> ${escapeHtml(customer.email)}</p>
             <p class="customer-meta"><strong>Account Number:</strong> ${escapeHtml(customer.account_number)}</p>
             <p class="customer-meta"><strong>Balance:</strong> £${customer.balance}</p>
-            <p class="customer-meta"><strong>Status:</strong> 
+            <p class="customer-meta"><strong>Status:</strong>
                 <span class="status-pill ${customer.is_active ? "status-active" : "status-inactive"}">
                     ${customer.is_active ? "Active" : "Inactive"}
                 </span>
             </p>
             <div class="customer-actions">
                 <button onclick="viewCustomer(${customer.id})">View</button>
-                ${managerActions ? `<button onclick="loadCustomerIntoEditForm(${customer.id}, ${JSON.stringify(customer.full_name)}, ${JSON.stringify(customer.email)})">Edit</button>` : ""}
+                ${managerActions ? `<button onclick="startEditCustomer(${customer.id})">Edit</button>` : ""}
                 ${managerActions && customer.is_active ? `<button class="danger-btn" onclick="deactivateCustomer(${customer.id})">Deactivate</button>` : ""}
+                ${managerActions && !customer.is_active ? `<button onclick="reactivateCustomer(${customer.id})">Activate</button>` : ""}
                 ${managerActions ? `<button class="danger-btn" onclick="deleteCustomer(${customer.id})">Delete</button>` : ""}
             </div>
         </div>
@@ -268,7 +269,7 @@ function renderCustomerDetail(customer) {
             <p class="customer-meta"><strong>Email:</strong> ${escapeHtml(customer.email)}</p>
             <p class="customer-meta"><strong>Account Number:</strong> ${escapeHtml(customer.account_number)}</p>
             <p class="customer-meta"><strong>Balance:</strong> £${customer.balance}</p>
-            <p class="customer-meta"><strong>Status:</strong> 
+            <p class="customer-meta"><strong>Status:</strong>
                 <span class="status-pill ${customer.is_active ? "status-active" : "status-inactive"}">
                     ${customer.is_active ? "Active" : "Inactive"}
                 </span>
@@ -372,11 +373,13 @@ async function fetchAuditLogs() {
     } catch (error) {
         if (window.currentUserRole === "manager") {
             showMessage(error.message, true);
-        } else if (auditList) {
-            auditList.innerHTML = `<div class="audit-item"><p class="muted-text">Audit log is restricted to manager accounts.</p></div>`;
-        }
-        if (recentActivityPanel && window.currentUserRole !== "manager") {
-            recentActivityPanel.innerHTML = `<p class="muted-text">Recent audit activity is available to manager accounts only.</p>`;
+        } else {
+            if (auditList) {
+                auditList.innerHTML = `<div class="audit-item"><p class="muted-text">Audit log is restricted to manager accounts.</p></div>`;
+            }
+            if (recentActivityPanel) {
+                recentActivityPanel.innerHTML = `<p class="muted-text">Recent audit activity is available to manager accounts only.</p>`;
+            }
         }
     }
 }
@@ -421,6 +424,11 @@ editCustomerForm?.addEventListener("submit", async (event) => {
 
     if (!customerId) {
         showEditMessage("Select a customer first using the Edit button.", true);
+        return;
+    }
+
+    if (!full_name || !email) {
+        showEditMessage("Full name and email are required.", true);
         return;
     }
 
@@ -571,16 +579,31 @@ async function viewCustomer(customerId) {
         const customer = await handleJsonResponse(response);
         renderCustomerDetail(customer);
         fetchTransactionsForCustomer(customer.account_number);
+
+        if (window.currentUserRole === "manager") {
+            document.getElementById("edit-customer-id").value = customer.id;
+            document.getElementById("edit-full-name").value = customer.full_name;
+            document.getElementById("edit-email").value = customer.email;
+        }
     } catch (error) {
         showMessage(error.message, true);
     }
 }
 
-function loadCustomerIntoEditForm(customerId, fullName, email) {
-    document.getElementById("edit-customer-id").value = customerId;
-    document.getElementById("edit-full-name").value = fullName;
-    document.getElementById("edit-email").value = email;
-    showEditMessage("Customer loaded into edit form.");
+async function startEditCustomer(customerId) {
+    try {
+        const response = await fetch(`/api/customers/${customerId}`);
+        const customer = await handleJsonResponse(response);
+
+        document.getElementById("edit-customer-id").value = customer.id;
+        document.getElementById("edit-full-name").value = customer.full_name;
+        document.getElementById("edit-email").value = customer.email;
+
+        showEditMessage(`Loaded ${customer.full_name} into edit form.`);
+        document.getElementById("edit-full-name").focus();
+    } catch (error) {
+        showEditMessage(error.message, true);
+    }
 }
 
 async function deactivateCustomer(customerId) {
@@ -595,6 +618,28 @@ async function deactivateCustomer(customerId) {
 
                 await handleJsonResponse(response);
                 showMessage("Customer deactivated successfully.");
+                fetchCustomers();
+                fetchAuditLogs();
+                fetchDashboardSummary();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        }
+    );
+}
+
+async function reactivateCustomer(customerId) {
+    openConfirmModal(
+        "Activate Customer",
+        "Reactivate this customer account?",
+        async () => {
+            try {
+                const response = await fetch(`/api/customers/${customerId}/reactivate`, {
+                    method: "PATCH"
+                });
+
+                await handleJsonResponse(response);
+                showMessage("Customer activated successfully.");
                 fetchCustomers();
                 fetchAuditLogs();
                 fetchDashboardSummary();
@@ -669,4 +714,5 @@ refreshAuditBtn?.addEventListener("click", fetchAuditLogs);
 window.deactivateCustomer = deactivateCustomer;
 window.deleteCustomer = deleteCustomer;
 window.viewCustomer = viewCustomer;
-window.loadCustomerIntoEditForm = loadCustomerIntoEditForm;
+window.startEditCustomer = startEditCustomer;
+window.reactivateCustomer = reactivateCustomer;
