@@ -9,6 +9,7 @@ const customerList = document.getElementById("customer-list");
 const transactionList = document.getElementById("transaction-list");
 const auditList = document.getElementById("audit-list");
 const customerDetailPanel = document.getElementById("customer-detail-panel");
+const customerTransactionsPanel = document.getElementById("customer-transactions-panel");
 const recentActivityPanel = document.getElementById("recent-activity-panel");
 
 const messageBox = document.getElementById("message");
@@ -201,6 +202,34 @@ function renderTransactions(transactions) {
     `).join("");
 }
 
+function renderCustomerTransactions(transactions, accountNumber) {
+    if (!customerTransactionsPanel) return;
+
+    if (transactions.length === 0) {
+        customerTransactionsPanel.innerHTML = `
+            <div class="transaction-item">
+                <p class="muted-text">No transactions found for account ${escapeHtml(accountNumber)}.</p>
+            </div>
+        `;
+        return;
+    }
+
+    customerTransactionsPanel.innerHTML = transactions.map((transaction) => `
+        <div class="transaction-item">
+            <h3>
+                <span class="status-pill ${transactionStatusClass(transaction.transaction_type)}">
+                    ${escapeHtml(transaction.transaction_type).toUpperCase()}
+                </span>
+            </h3>
+            <p class="transaction-meta"><strong>Amount:</strong> £${transaction.amount}</p>
+            <p class="transaction-meta"><strong>Description:</strong> ${escapeHtml(transaction.description || "")}</p>
+            <p class="transaction-meta"><strong>From Customer ID:</strong> ${transaction.from_customer_id ?? "-"}</p>
+            <p class="transaction-meta"><strong>To Customer ID:</strong> ${transaction.to_customer_id ?? "-"}</p>
+            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(transaction.created_at)}</p>
+        </div>
+    `).join("");
+}
+
 function renderAuditLogs(logs) {
     if (!auditList) return;
 
@@ -316,6 +345,18 @@ async function fetchTransactions() {
         const response = await fetch(url);
         const transactions = await handleJsonResponse(response);
         renderTransactions(transactions);
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+}
+
+async function fetchTransactionsForCustomer(accountNumber) {
+    if (!customerTransactionsPanel) return;
+
+    try {
+        const response = await fetch(`/api/transactions?account_number=${encodeURIComponent(accountNumber)}`);
+        const transactions = await handleJsonResponse(response);
+        renderCustomerTransactions(transactions, accountNumber);
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -529,6 +570,7 @@ async function viewCustomer(customerId) {
         const response = await fetch(`/api/customers/${customerId}`);
         const customer = await handleJsonResponse(response);
         renderCustomerDetail(customer);
+        fetchTransactionsForCustomer(customer.account_number);
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -581,6 +623,14 @@ async function deleteCustomer(customerId) {
 
                 if (customerDetailPanel) {
                     customerDetailPanel.innerHTML = `<p class="muted-text">Select “View” on a customer to see their current stored data.</p>`;
+                }
+
+                if (customerTransactionsPanel) {
+                    customerTransactionsPanel.innerHTML = `
+                        <div class="transaction-item">
+                            <p class="muted-text">Select “View” on a customer to load transactions for that customer.</p>
+                        </div>
+                    `;
                 }
 
                 document.getElementById("edit-customer-id").value = "";

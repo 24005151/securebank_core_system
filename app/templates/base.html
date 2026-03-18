@@ -22,7 +22,9 @@
                 <a href="#customers-section" class="sidebar-link">Customers</a>
                 <a href="#transactions-section" class="sidebar-link">Transactions</a>
                 <a href="#audit-section" class="sidebar-link">Audit Log</a>
-                <a href="/login" class="sidebar-link">Login</a>
+                {% if not (user is defined and user) %}
+                    <a href="/login" class="sidebar-link">Login</a>
+                {% endif %}
             </nav>
 
             {% if user is defined and user %}
