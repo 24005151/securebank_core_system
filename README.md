@@ -1,24 +1,23 @@
 # SecureBank Core System
 
-SecureBank Core System is a beginner-friendly banking web application prototype built using FastAPI, SQLite, HTML, CSS, and JavaScript.
+SecureBank Core System is a banking web application prototype built with FastAPI, SQLite, HTML, CSS, and JavaScript.
 
-## Build 1 Features
-- View dashboard
+## Version 3 Features
+- Session-based staff login
+- Protected dashboard
+- Logout
 - Create customer records
-- View customer records
-- Basic input validation
-- SQLite database integration
+- Search customers
+- Deactivate customers
+- Deposit funds
+- Withdraw funds
+- Transfer funds between accounts
+- Filter transaction history
+- Audit log
 
-## Technology Stack
-- Python
-- FastAPI
-- SQLite
-- SQLAlchemy
-- HTML
-- CSS
-- JavaScript
+## Demo login
+- Username: admin
+- Password: admin123
 
 ## Run the project
-
-```bash
 uvicorn app.main:app --reload

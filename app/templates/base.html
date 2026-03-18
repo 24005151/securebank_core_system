@@ -10,7 +10,16 @@
     <header class="site-header">
         <div class="container">
             <h1>SecureBank Core System</h1>
-            <p>Build 1 - Customer Management Prototype</p>
+            <p>Version 3 - Protected Banking Operations Prototype</p>
+
+            <nav class="top-nav">
+                <a href="/">Dashboard</a>
+                <a href="/login">Login</a>
+                {% if user is defined and user %}
+                    <span class="user-chip">Signed in as {{ user.username }} ({{ user.role }})</span>
+                    <button id="logout-btn" type="button" class="small-btn">Logout</button>
+                {% endif %}
+            </nav>
         </div>
     </header>
 

@@ -1,4 +1,11 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1, max_length=100)
 
 
 class CustomerCreate(BaseModel):
@@ -17,3 +24,38 @@ class CustomerResponse(BaseModel):
     account_number: str
     balance: int
     is_active: bool
+
+
+class DepositWithdrawRequest(BaseModel):
+    account_number: str = Field(..., min_length=6, max_length=20)
+    amount: int = Field(..., gt=0)
+    description: str = Field(default="", max_length=255)
+
+
+class TransferRequest(BaseModel):
+    from_account_number: str = Field(..., min_length=6, max_length=20)
+    to_account_number: str = Field(..., min_length=6, max_length=20)
+    amount: int = Field(..., gt=0)
+    description: str = Field(default="", max_length=255)
+
+
+class TransactionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    transaction_type: str
+    amount: int
+    description: str | None
+    from_customer_id: int | None
+    to_customer_id: int | None
+    created_at: datetime
+
+
+class AuditLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    event_type: str
+    actor: str
+    details: str
+    created_at: datetime
