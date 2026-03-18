@@ -3,123 +3,174 @@
 {% block title %}Dashboard - SecureBank Core System{% endblock %}
 
 {% block content %}
-<section class="card">
-    <h2>Create Customer</h2>
-
-    <form id="customer-form">
-        <div class="form-group">
-            <label for="full_name">Full Name</label>
-            <input type="text" id="full_name" maxlength="100" required>
-        </div>
-
-        <div class="form-group">
-            <label for="email">Email Address</label>
-            <input type="email" id="email" maxlength="120" required>
-        </div>
-
-        <div class="form-group">
-            <label for="account_number">Account Number</label>
-            <input type="text" id="account_number" maxlength="20" required>
-        </div>
-
-        <div class="form-group">
-            <label for="balance">Opening Balance</label>
-            <input type="number" id="balance" min="0" value="0" required>
-        </div>
-
-        <button type="submit">Create Customer</button>
-    </form>
-
-    <p id="message"></p>
-</section>
-
-<section class="card">
-    <div class="section-header">
-        <h2>Customer Records</h2>
-        <div class="inline-tools">
-            <input type="text" id="customer-search" placeholder="Search by name, email, or account">
-            <button id="search-customers-btn" type="button">Search</button>
-            <button id="refresh-btn" type="button">Refresh</button>
-        </div>
+<section class="dashboard-hero card">
+    <div>
+        <h2>Banking Operations Dashboard</h2>
+        <p class="muted-text">
+            Manage customers, process transactions, and review audit activity from one place.
+        </p>
     </div>
-    <div id="customer-list"></div>
+    <div class="hero-tag">SecureBank V3</div>
 </section>
 
-<section class="card">
-    <h2>Deposit</h2>
-    <form id="deposit-form">
-        <div class="form-group">
-            <label for="deposit-account">Account Number</label>
-            <input type="text" id="deposit-account" required>
-        </div>
-
-        <div class="form-group">
-            <label for="deposit-amount">Amount</label>
-            <input type="number" id="deposit-amount" min="1" required>
-        </div>
-
-        <div class="form-group">
-            <label for="deposit-description">Description</label>
-            <input type="text" id="deposit-description" maxlength="255">
-        </div>
-
-        <button type="submit">Deposit Funds</button>
-    </form>
+<section class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-label">Customer Management</span>
+        <strong class="stat-value">Create & Search</strong>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Transactions</span>
+        <strong class="stat-value">Deposit / Withdraw / Transfer</strong>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Monitoring</span>
+        <strong class="stat-value">Audit Log Enabled</strong>
+    </div>
 </section>
 
-<section class="card">
-    <h2>Withdraw</h2>
-    <form id="withdraw-form">
-        <div class="form-group">
-            <label for="withdraw-account">Account Number</label>
-            <input type="text" id="withdraw-account" required>
+<section class="grid-two">
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Create Customer</h2>
+            <span class="section-badge">Customer Setup</span>
         </div>
 
-        <div class="form-group">
-            <label for="withdraw-amount">Amount</label>
-            <input type="number" id="withdraw-amount" min="1" required>
+        <form id="customer-form">
+            <div class="form-group">
+                <label for="full_name">Full Name</label>
+                <input type="text" id="full_name" maxlength="100" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" maxlength="120" required>
+            </div>
+
+            <div class="form-group">
+                <label for="account_number">Account Number</label>
+                <input type="text" id="account_number" maxlength="20" required>
+            </div>
+
+            <div class="form-group">
+                <label for="balance">Opening Balance</label>
+                <input type="number" id="balance" min="0" value="0" required>
+            </div>
+
+            <button type="submit" class="primary-btn">Create Customer</button>
+        </form>
+
+        <p id="message" class="status-message"></p>
+    </div>
+
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Customer Records</h2>
+            <span class="section-badge">Search & Review</span>
         </div>
 
-        <div class="form-group">
-            <label for="withdraw-description">Description</label>
-            <input type="text" id="withdraw-description" maxlength="255">
+        <div class="toolbar-card">
+            <input type="text" id="customer-search" placeholder="Search by name, email, or account">
+            <button id="search-customers-btn" type="button" class="secondary-btn">Search</button>
+            <button id="refresh-btn" type="button" class="ghost-btn">Refresh</button>
         </div>
 
-        <button type="submit">Withdraw Funds</button>
-    </form>
+        <div id="customer-list"></div>
+    </div>
 </section>
 
-<section class="card">
-    <h2>Transfer</h2>
-    <form id="transfer-form">
-        <div class="form-group">
-            <label for="from_account_number">From Account</label>
-            <input type="text" id="from_account_number" required>
+<section class="grid-three">
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Deposit</h2>
+            <span class="section-badge green-badge">Funds In</span>
         </div>
 
-        <div class="form-group">
-            <label for="to_account_number">To Account</label>
-            <input type="text" id="to_account_number" required>
+        <form id="deposit-form">
+            <div class="form-group">
+                <label for="deposit-account">Account Number</label>
+                <input type="text" id="deposit-account" required>
+            </div>
+
+            <div class="form-group">
+                <label for="deposit-amount">Amount</label>
+                <input type="number" id="deposit-amount" min="1" required>
+            </div>
+
+            <div class="form-group">
+                <label for="deposit-description">Description</label>
+                <input type="text" id="deposit-description" maxlength="255">
+            </div>
+
+            <button type="submit" class="primary-btn">Deposit Funds</button>
+        </form>
+    </div>
+
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Withdraw</h2>
+            <span class="section-badge orange-badge">Funds Out</span>
         </div>
 
-        <div class="form-group">
-            <label for="transfer_amount">Amount</label>
-            <input type="number" id="transfer_amount" min="1" required>
+        <form id="withdraw-form">
+            <div class="form-group">
+                <label for="withdraw-account">Account Number</label>
+                <input type="text" id="withdraw-account" required>
+            </div>
+
+            <div class="form-group">
+                <label for="withdraw-amount">Amount</label>
+                <input type="number" id="withdraw-amount" min="1" required>
+            </div>
+
+            <div class="form-group">
+                <label for="withdraw-description">Description</label>
+                <input type="text" id="withdraw-description" maxlength="255">
+            </div>
+
+            <button type="submit" class="secondary-btn">Withdraw Funds</button>
+        </form>
+    </div>
+
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Transfer</h2>
+            <span class="section-badge blue-badge">Internal Move</span>
         </div>
 
-        <div class="form-group">
-            <label for="transfer_description">Description</label>
-            <input type="text" id="transfer_description" maxlength="255">
-        </div>
+        <form id="transfer-form">
+            <div class="form-group">
+                <label for="from_account_number">From Account</label>
+                <input type="text" id="from_account_number" required>
+            </div>
 
-        <button type="submit">Transfer Funds</button>
-    </form>
+            <div class="form-group">
+                <label for="to_account_number">To Account</label>
+                <input type="text" id="to_account_number" required>
+            </div>
+
+            <div class="form-group">
+                <label for="transfer_amount">Amount</label>
+                <input type="number" id="transfer_amount" min="1" required>
+            </div>
+
+            <div class="form-group">
+                <label for="transfer_description">Description</label>
+                <input type="text" id="transfer_description" maxlength="255">
+            </div>
+
+            <button type="submit" class="primary-btn">Transfer Funds</button>
+        </form>
+    </div>
 </section>
 
-<section class="card">
-    <div class="section-header">
-        <h2>Transaction History</h2>
-        <div class="inline-tools">
+<section class="grid-two">
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Transaction History</h2>
+            <span class="section-badge">Activity Feed</span>
+        </div>
+
+        <div class="toolbar-card">
             <input type="text" id="transaction-account-filter" placeholder="Filter by account number">
             <select id="transaction-type-filter">
                 <option value="">All Types</option>
@@ -127,18 +178,24 @@
                 <option value="withdraw">Withdraw</option>
                 <option value="transfer">Transfer</option>
             </select>
-            <button id="filter-transactions-btn" type="button">Filter</button>
-            <button id="refresh-transactions-btn" type="button">Refresh</button>
+            <button id="filter-transactions-btn" type="button" class="secondary-btn">Filter</button>
+            <button id="refresh-transactions-btn" type="button" class="ghost-btn">Refresh</button>
         </div>
-    </div>
-    <div id="transaction-list"></div>
-</section>
 
-<section class="card">
-    <div class="section-header">
-        <h2>Audit Log</h2>
-        <button id="refresh-audit-btn" type="button">Refresh</button>
+        <div id="transaction-list"></div>
     </div>
-    <div id="audit-list"></div>
+
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Audit Log</h2>
+            <span class="section-badge">Security Monitoring</span>
+        </div>
+
+        <div class="toolbar-card single-toolbar">
+            <button id="refresh-audit-btn" type="button" class="ghost-btn">Refresh</button>
+        </div>
+
+        <div id="audit-list"></div>
+    </div>
 </section>
 {% endblock %}

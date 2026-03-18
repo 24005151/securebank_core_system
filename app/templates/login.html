@@ -3,32 +3,46 @@
 {% block title %}Staff Login - SecureBank Core System{% endblock %}
 
 {% block content %}
-<section class="card small-card">
-    <h2>Staff Login</h2>
+<section class="login-wrapper">
+    <div class="login-panel">
+        <div class="card small-card hero-card">
+            <div class="hero-badge">Secure Staff Access</div>
+            <h2>Staff Login</h2>
+            <p class="muted-text">
+                Sign in to access customer records, transaction processing, and audit monitoring.
+            </p>
 
-    <form id="login-form">
-        <div class="form-group">
-            <label for="login-username">Username</label>
-            <input type="text" id="login-username" required>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required>
+                </div>
+
+                <button type="submit" class="primary-btn full-width-btn">Login</button>
+            </form>
+
+            <p id="login-message" class="status-message"></p>
         </div>
 
-        <div class="form-group">
-            <label for="login-password">Password</label>
-            <input type="password" id="login-password" required>
+        <div class="card small-card side-info-card">
+            <h3>Demo Access</h3>
+            <p><strong>Username:</strong> admin</p>
+            <p><strong>Password:</strong> admin123</p>
         </div>
 
-        <button type="submit">Login</button>
-    </form>
-
-    <p id="login-message"></p>
-
-    <div class="info-box">
-        <p><strong>Demo username:</strong> admin</p>
-        <p><strong>Demo password:</strong> admin123</p>
-    </div>
-
-    <div class="info-box">
-        <p><strong>Privacy notice:</strong> This prototype stores only limited customer data for assignment purposes, including name, email, account number and balance. Access is restricted to authenticated staff users.</p>
+        <div class="card small-card side-info-card">
+            <h3>Privacy Notice</h3>
+            <p>
+                This prototype stores limited customer data for assignment purposes only,
+                including name, email, account number, and balance. Access is restricted
+                to authenticated staff users.
+            </p>
+        </div>
     </div>
 </section>
 {% endblock %}

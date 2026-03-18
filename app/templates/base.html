@@ -8,13 +8,15 @@
 </head>
 <body>
     <header class="site-header">
-        <div class="container">
-            <h1>SecureBank Core System</h1>
-            <p>Version 3 - Protected Banking Operations Prototype</p>
+        <div class="container header-inner">
+            <div>
+                <h1>SecureBank Core System</h1>
+                <p class="subtitle">Protected Banking Operations Prototype</p>
+            </div>
 
             <nav class="top-nav">
-                <a href="/">Dashboard</a>
-                <a href="/login">Login</a>
+                <a href="/" class="nav-link">Dashboard</a>
+                <a href="/login" class="nav-link">Login</a>
                 {% if user is defined and user %}
                     <span class="user-chip">Signed in as {{ user.username }} ({{ user.role }})</span>
                     <button id="logout-btn" type="button" class="small-btn">Logout</button>
@@ -23,7 +25,7 @@
         </div>
     </header>
 
-    <main class="container">
+    <main class="container app-shell">
         {% block content %}{% endblock %}
     </main>
 
