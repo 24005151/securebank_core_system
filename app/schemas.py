@@ -15,6 +15,11 @@ class CustomerCreate(BaseModel):
     balance: int = Field(default=0, ge=0)
 
 
+class CustomerUpdate(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=100)
+    email: EmailStr
+
+
 class CustomerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,3 +64,11 @@ class AuditLogResponse(BaseModel):
     actor: str
     details: str
     created_at: datetime
+
+
+class DashboardSummaryResponse(BaseModel):
+    total_customers: int
+    active_customers: int
+    inactive_customers: int
+    total_transactions: int
+    total_balance: int

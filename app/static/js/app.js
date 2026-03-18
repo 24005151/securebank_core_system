@@ -1,4 +1,5 @@
 const customerForm = document.getElementById("customer-form");
+const editCustomerForm = document.getElementById("edit-customer-form");
 const depositForm = document.getElementById("deposit-form");
 const withdrawForm = document.getElementById("withdraw-form");
 const transferForm = document.getElementById("transfer-form");
@@ -7,8 +8,10 @@ const loginForm = document.getElementById("login-form");
 const customerList = document.getElementById("customer-list");
 const transactionList = document.getElementById("transaction-list");
 const auditList = document.getElementById("audit-list");
+const customerDetailPanel = document.getElementById("customer-detail-panel");
 
 const messageBox = document.getElementById("message");
+const editMessageBox = document.getElementById("edit-message");
 const loginMessageBox = document.getElementById("login-message");
 
 const refreshBtn = document.getElementById("refresh-btn");
@@ -27,6 +30,15 @@ function showMessage(message, isError = false) {
     }, 3000);
 }
 
+function showEditMessage(message, isError = false) {
+    if (!editMessageBox) return;
+    editMessageBox.textContent = message;
+    editMessageBox.style.color = isError ? "crimson" : "green";
+    setTimeout(() => {
+        editMessageBox.textContent = "";
+    }, 3000);
+}
+
 function showLoginMessage(message, isError = false) {
     if (!loginMessageBox) return;
     loginMessageBox.textContent = message;
@@ -40,6 +52,21 @@ function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text ?? "";
     return div.innerHTML;
+}
+
+function renderDashboardSummary(summary) {
+    const map = {
+        "stat-total-customers": summary.total_customers,
+        "stat-active-customers": summary.active_customers,
+        "stat-inactive-customers": summary.inactive_customers,
+        "stat-total-transactions": summary.total_transactions,
+        "stat-total-balance": `£${summary.total_balance}`
+    };
+
+    Object.entries(map).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    });
 }
 
 function renderCustomers(customers) {
@@ -58,6 +85,8 @@ function renderCustomers(customers) {
             <p class="customer-meta"><strong>Balance:</strong> £${customer.balance}</p>
             <p class="customer-meta"><strong>Status:</strong> ${customer.is_active ? "Active" : "Inactive"}</p>
             <div class="customer-actions">
+                <button onclick="viewCustomer(${customer.id})">View</button>
+                <button onclick="loadCustomerIntoEditForm(${customer.id}, '${escapeHtml(customer.full_name)}', '${escapeHtml(customer.email)}')">Edit</button>
                 ${customer.is_active ? `<button class="danger-btn" onclick="deactivateCustomer(${customer.id})">Deactivate</button>` : ""}
                 <button class="danger-btn" onclick="deleteCustomer(${customer.id})">Delete</button>
             </div>
@@ -103,6 +132,21 @@ function renderAuditLogs(logs) {
     `).join("");
 }
 
+function renderCustomerDetail(customer) {
+    if (!customerDetailPanel) return;
+
+    customerDetailPanel.innerHTML = `
+        <div class="customer-item ${customer.is_active ? "" : "inactive"}">
+            <h3>${escapeHtml(customer.full_name)}</h3>
+            <p class="customer-meta"><strong>Customer ID:</strong> ${customer.id}</p>
+            <p class="customer-meta"><strong>Email:</strong> ${escapeHtml(customer.email)}</p>
+            <p class="customer-meta"><strong>Account Number:</strong> ${escapeHtml(customer.account_number)}</p>
+            <p class="customer-meta"><strong>Balance:</strong> £${customer.balance}</p>
+            <p class="customer-meta"><strong>Status:</strong> ${customer.is_active ? "Active" : "Inactive"}</p>
+        </div>
+    `;
+}
+
 async function handleJsonResponse(response) {
     const data = await response.json();
 
@@ -114,6 +158,16 @@ async function handleJsonResponse(response) {
     }
 
     return data;
+}
+
+async function fetchDashboardSummary() {
+    try {
+        const response = await fetch("/api/dashboard-summary");
+        const summary = await handleJsonResponse(response);
+        renderDashboardSummary(summary);
+    } catch (error) {
+        showMessage(error.message, true);
+    }
 }
 
 async function fetchCustomers() {
@@ -194,8 +248,38 @@ customerForm?.addEventListener("submit", async (event) => {
         showMessage("Customer created successfully.");
         fetchCustomers();
         fetchAuditLogs();
+        fetchDashboardSummary();
     } catch (error) {
         showMessage(error.message, true);
+    }
+});
+
+editCustomerForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const customerId = document.getElementById("edit-customer-id").value;
+    const full_name = document.getElementById("edit-full-name").value.trim();
+    const email = document.getElementById("edit-email").value.trim();
+
+    if (!customerId) {
+        showEditMessage("Select a customer first using the Edit button.", true);
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/customers/${customerId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ full_name, email })
+        });
+
+        await handleJsonResponse(response);
+        showEditMessage("Customer updated successfully.");
+        fetchCustomers();
+        fetchAuditLogs();
+        viewCustomer(customerId);
+    } catch (error) {
+        showEditMessage(error.message, true);
     }
 });
 
@@ -219,6 +303,7 @@ depositForm?.addEventListener("submit", async (event) => {
         fetchCustomers();
         fetchTransactions();
         fetchAuditLogs();
+        fetchDashboardSummary();
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -244,6 +329,7 @@ withdrawForm?.addEventListener("submit", async (event) => {
         fetchCustomers();
         fetchTransactions();
         fetchAuditLogs();
+        fetchDashboardSummary();
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -275,6 +361,7 @@ transferForm?.addEventListener("submit", async (event) => {
         fetchCustomers();
         fetchTransactions();
         fetchAuditLogs();
+        fetchDashboardSummary();
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -313,6 +400,23 @@ logoutBtn?.addEventListener("click", async () => {
     }
 });
 
+async function viewCustomer(customerId) {
+    try {
+        const response = await fetch(`/api/customers/${customerId}`);
+        const customer = await handleJsonResponse(response);
+        renderCustomerDetail(customer);
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+}
+
+function loadCustomerIntoEditForm(customerId, fullName, email) {
+    document.getElementById("edit-customer-id").value = customerId;
+    document.getElementById("edit-full-name").value = fullName;
+    document.getElementById("edit-email").value = email;
+    showEditMessage("Customer loaded into edit form.");
+}
+
 async function deactivateCustomer(customerId) {
     const confirmed = confirm("Deactivate this customer account?");
     if (!confirmed) return;
@@ -326,6 +430,7 @@ async function deactivateCustomer(customerId) {
         showMessage("Customer deactivated successfully.");
         fetchCustomers();
         fetchAuditLogs();
+        fetchDashboardSummary();
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -344,6 +449,15 @@ async function deleteCustomer(customerId) {
         showMessage("Customer deleted successfully.");
         fetchCustomers();
         fetchAuditLogs();
+        fetchDashboardSummary();
+
+        if (customerDetailPanel) {
+            customerDetailPanel.innerHTML = `<p class="muted-text">Select “View” on a customer to see their current stored data.</p>`;
+        }
+
+        document.getElementById("edit-customer-id").value = "";
+        document.getElementById("edit-full-name").value = "";
+        document.getElementById("edit-email").value = "";
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -356,6 +470,7 @@ filterTransactionsBtn?.addEventListener("click", fetchTransactions);
 refreshAuditBtn?.addEventListener("click", fetchAuditLogs);
 
 if (customerList) {
+    fetchDashboardSummary();
     fetchCustomers();
 }
 if (transactionList) {
@@ -367,3 +482,5 @@ if (auditList) {
 
 window.deactivateCustomer = deactivateCustomer;
 window.deleteCustomer = deleteCustomer;
+window.viewCustomer = viewCustomer;
+window.loadCustomerIntoEditForm = loadCustomerIntoEditForm;

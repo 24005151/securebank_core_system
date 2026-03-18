@@ -14,6 +14,12 @@ def require_login(request: Request):
     return user
 
 
+@router.get("/api/dashboard-summary", response_model=schemas.DashboardSummaryResponse)
+def read_dashboard_summary(request: Request, db: Session = Depends(get_db)):
+    require_login(request)
+    return crud.get_dashboard_summary(db)
+
+
 @router.get("/api/customers", response_model=list[schemas.CustomerResponse])
 def read_customers(
     request: Request,
@@ -52,6 +58,20 @@ def create_new_customer(
         raise HTTPException(status_code=400, detail="Account number already exists.")
 
     return crud.create_customer(db, customer, actor=user["username"])
+
+
+@router.put("/api/customers/{customer_id}", response_model=schemas.CustomerResponse)
+def update_customer(
+    customer_id: int,
+    request: Request,
+    payload: schemas.CustomerUpdate,
+    db: Session = Depends(get_db)
+):
+    user = require_login(request)
+    customer, error = crud.update_customer(db, customer_id, payload, actor=user["username"])
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return customer
 
 
 @router.patch("/api/customers/{customer_id}/deactivate", response_model=schemas.CustomerResponse)

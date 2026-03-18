@@ -1,4 +1,4 @@
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 
@@ -56,6 +56,26 @@ def authenticate_staff_user(db: Session, username: str, password: str):
     return user
 
 
+def get_dashboard_summary(db: Session):
+    total_customers = db.query(func.count(models.Customer.id)).scalar() or 0
+    active_customers = db.query(func.count(models.Customer.id)).filter(
+        models.Customer.is_active.is_(True)
+    ).scalar() or 0
+    inactive_customers = db.query(func.count(models.Customer.id)).filter(
+        models.Customer.is_active.is_(False)
+    ).scalar() or 0
+    total_transactions = db.query(func.count(models.Transaction.id)).scalar() or 0
+    total_balance = db.query(func.coalesce(func.sum(models.Customer.balance), 0)).scalar() or 0
+
+    return {
+        "total_customers": total_customers,
+        "active_customers": active_customers,
+        "inactive_customers": inactive_customers,
+        "total_transactions": total_transactions,
+        "total_balance": total_balance,
+    }
+
+
 def get_all_customers(db: Session, search: str | None = None):
     query = db.query(models.Customer)
 
@@ -105,6 +125,33 @@ def create_customer(db: Session, customer: schemas.CustomerCreate, actor: str):
         f"Created customer {db_customer.full_name} ({db_customer.account_number})"
     )
     return db_customer
+
+
+def update_customer(db: Session, customer_id: int, payload: schemas.CustomerUpdate, actor: str):
+    customer = get_customer_by_id(db, customer_id)
+    if not customer:
+        return None, "Customer not found."
+
+    existing_email = get_customer_by_email(db, payload.email.strip().lower())
+    if existing_email and existing_email.id != customer.id:
+        return None, "Email already exists."
+
+    old_name = customer.full_name
+    old_email = customer.email
+
+    customer.full_name = payload.full_name.strip()
+    customer.email = payload.email.strip().lower()
+
+    db.commit()
+    db.refresh(customer)
+
+    create_audit_log(
+        db,
+        "customer_update",
+        actor,
+        f"Updated customer {customer.account_number}: name '{old_name}' to '{customer.full_name}', email '{old_email}' to '{customer.email}'"
+    )
+    return customer, None
 
 
 def deactivate_customer(db: Session, customer_id: int, actor: str):

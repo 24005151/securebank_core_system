@@ -7,24 +7,32 @@
     <div>
         <h2>Banking Operations Dashboard</h2>
         <p class="muted-text">
-            Manage customers, process transactions, and review audit activity from one place.
+            Manage customers, process transactions, review audit activity, and monitor key banking metrics.
         </p>
     </div>
-    <div class="hero-tag">SecureBank V3</div>
+    <div class="hero-tag">SecureBank V4</div>
 </section>
 
 <section class="stats-grid">
     <div class="stat-card">
-        <span class="stat-label">Customer Management</span>
-        <strong class="stat-value">Create & Search</strong>
+        <span class="stat-label">Total Customers</span>
+        <strong class="stat-value" id="stat-total-customers">0</strong>
     </div>
     <div class="stat-card">
-        <span class="stat-label">Transactions</span>
-        <strong class="stat-value">Deposit / Withdraw / Transfer</strong>
+        <span class="stat-label">Active Customers</span>
+        <strong class="stat-value" id="stat-active-customers">0</strong>
     </div>
     <div class="stat-card">
-        <span class="stat-label">Monitoring</span>
-        <strong class="stat-value">Audit Log Enabled</strong>
+        <span class="stat-label">Inactive Customers</span>
+        <strong class="stat-value" id="stat-inactive-customers">0</strong>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Total Transactions</span>
+        <strong class="stat-value" id="stat-total-transactions">0</strong>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Total Bank Balance</span>
+        <strong class="stat-value" id="stat-total-balance">£0</strong>
     </div>
 </section>
 
@@ -65,7 +73,7 @@
     <div class="card section-card">
         <div class="section-title-row">
             <h2>Customer Records</h2>
-            <span class="section-badge">Search & Review</span>
+            <span class="section-badge">Search & Manage</span>
         </div>
 
         <div class="toolbar-card">
@@ -75,6 +83,43 @@
         </div>
 
         <div id="customer-list"></div>
+    </div>
+</section>
+
+<section class="grid-two">
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Customer Detail View</h2>
+            <span class="section-badge">Access Request Support</span>
+        </div>
+        <div id="customer-detail-panel">
+            <p class="muted-text">Select “View” on a customer to see their current stored data.</p>
+        </div>
+    </div>
+
+    <div class="card section-card">
+        <div class="section-title-row">
+            <h2>Edit Customer</h2>
+            <span class="section-badge">Update Customer Data</span>
+        </div>
+
+        <form id="edit-customer-form">
+            <input type="hidden" id="edit-customer-id">
+
+            <div class="form-group">
+                <label for="edit-full-name">Full Name</label>
+                <input type="text" id="edit-full-name" maxlength="100">
+            </div>
+
+            <div class="form-group">
+                <label for="edit-email">Email Address</label>
+                <input type="email" id="edit-email" maxlength="120">
+            </div>
+
+            <button type="submit" class="primary-btn">Save Changes</button>
+        </form>
+
+        <p id="edit-message" class="status-message"></p>
     </div>
 </section>
 
