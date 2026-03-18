@@ -7,27 +7,61 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <header class="site-header">
-        <div class="container header-inner">
-            <div>
-                <h1>SecureBank Core System</h1>
-                <p class="subtitle">Protected Banking Operations Prototype</p>
+    <div class="layout-shell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-mark">SB</div>
+                <div>
+                    <h1>SecureBank</h1>
+                    <p>Core System</p>
+                </div>
             </div>
 
-            <nav class="top-nav">
-                <a href="/" class="nav-link">Dashboard</a>
-                <a href="/login" class="nav-link">Login</a>
-                {% if user is defined and user %}
-                    <span class="user-chip">Signed in as {{ user.username }} ({{ user.role }})</span>
-                    <button id="logout-btn" type="button" class="small-btn">Logout</button>
-                {% endif %}
+            <nav class="sidebar-nav">
+                <a href="/" class="sidebar-link">Dashboard</a>
+                <a href="#customers-section" class="sidebar-link">Customers</a>
+                <a href="#transactions-section" class="sidebar-link">Transactions</a>
+                <a href="#audit-section" class="sidebar-link">Audit Log</a>
+                <a href="/login" class="sidebar-link">Login</a>
             </nav>
-        </div>
-    </header>
 
-    <main class="container app-shell">
-        {% block content %}{% endblock %}
-    </main>
+            {% if user is defined and user %}
+            <div class="sidebar-user">
+                <div class="user-card">
+                    <div class="user-card-label">Signed in as</div>
+                    <div class="user-card-name">{{ user.username }}</div>
+                    <div class="user-card-role">{{ user.role }}</div>
+                </div>
+                <button id="logout-btn" type="button" class="small-btn full-width-btn">Logout</button>
+            </div>
+            {% endif %}
+        </aside>
+
+        <div class="main-shell">
+            <header class="topbar">
+                <div>
+                    <h2 class="topbar-title">{% block page_title %}SecureBank Dashboard{% endblock %}</h2>
+                    <p class="topbar-subtitle">Protected banking operations and audit monitoring</p>
+                </div>
+                <div class="topbar-badge">Version 5 UI</div>
+            </header>
+
+            <main class="content-area">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h3 id="modal-title">Confirm Action</h3>
+            <p id="modal-message">Are you sure?</p>
+            <div class="modal-actions">
+                <button id="modal-cancel" type="button" class="ghost-btn">Cancel</button>
+                <button id="modal-confirm" type="button" class="danger-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
 
     <script src="/static/js/app.js"></script>
 </body>

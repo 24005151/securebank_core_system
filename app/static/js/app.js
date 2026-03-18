@@ -9,6 +9,7 @@ const customerList = document.getElementById("customer-list");
 const transactionList = document.getElementById("transaction-list");
 const auditList = document.getElementById("audit-list");
 const customerDetailPanel = document.getElementById("customer-detail-panel");
+const recentActivityPanel = document.getElementById("recent-activity-panel");
 
 const messageBox = document.getElementById("message");
 const editMessageBox = document.getElementById("edit-message");
@@ -20,6 +21,14 @@ const refreshTransactionsBtn = document.getElementById("refresh-transactions-btn
 const filterTransactionsBtn = document.getElementById("filter-transactions-btn");
 const refreshAuditBtn = document.getElementById("refresh-audit-btn");
 const logoutBtn = document.getElementById("logout-btn");
+
+const confirmModal = document.getElementById("confirm-modal");
+const modalTitle = document.getElementById("modal-title");
+const modalMessage = document.getElementById("modal-message");
+const modalConfirm = document.getElementById("modal-confirm");
+const modalCancel = document.getElementById("modal-cancel");
+
+let confirmAction = null;
 
 function showMessage(message, isError = false) {
     if (!messageBox) return;
@@ -54,6 +63,34 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function openConfirmModal(title, message, onConfirm) {
+    if (!confirmModal) return;
+    modalTitle.textContent = title;
+    modalMessage.textContent = message;
+    confirmAction = onConfirm;
+    confirmModal.classList.remove("hidden");
+}
+
+function closeConfirmModal() {
+    if (!confirmModal) return;
+    confirmModal.classList.add("hidden");
+    confirmAction = null;
+}
+
+modalConfirm?.addEventListener("click", async () => {
+    if (confirmAction) {
+        await confirmAction();
+    }
+    closeConfirmModal();
+});
+
+modalCancel?.addEventListener("click", closeConfirmModal);
+confirmModal?.addEventListener("click", (event) => {
+    if (event.target === confirmModal) {
+        closeConfirmModal();
+    }
+});
+
 function renderDashboardSummary(summary) {
     const map = {
         "stat-total-customers": summary.total_customers,
@@ -67,13 +104,34 @@ function renderDashboardSummary(summary) {
         const el = document.getElementById(id);
         if (el) el.textContent = value;
     });
+
+    const safePercent = (value, total) => {
+        if (!total || total <= 0) return "12%";
+        return `${Math.max(12, Math.min(100, Math.round((value / total) * 100)))}%`;
+    };
+
+    const totalCustomers = summary.total_customers || 0;
+    const totalTransactions = summary.total_transactions || 0;
+    const totalBalance = summary.total_balance || 0;
+
+    const barTotalCustomers = document.getElementById("bar-total-customers");
+    const barActiveCustomers = document.getElementById("bar-active-customers");
+    const barInactiveCustomers = document.getElementById("bar-inactive-customers");
+    const barTotalTransactions = document.getElementById("bar-total-transactions");
+    const barTotalBalance = document.getElementById("bar-total-balance");
+
+    if (barTotalCustomers) barTotalCustomers.style.width = safePercent(totalCustomers, Math.max(totalCustomers, 10));
+    if (barActiveCustomers) barActiveCustomers.style.width = safePercent(summary.active_customers, totalCustomers || 1);
+    if (barInactiveCustomers) barInactiveCustomers.style.width = safePercent(summary.inactive_customers, totalCustomers || 1);
+    if (barTotalTransactions) barTotalTransactions.style.width = safePercent(totalTransactions, Math.max(totalTransactions, 10));
+    if (barTotalBalance) barTotalBalance.style.width = safePercent(totalBalance, Math.max(totalBalance, 1000));
 }
 
 function renderCustomers(customers) {
     if (!customerList) return;
 
     if (customers.length === 0) {
-        customerList.innerHTML = "<p>No customer records found.</p>";
+        customerList.innerHTML = `<div class="customer-item"><p class="muted-text">No customer records found.</p></div>`;
         return;
     }
 
@@ -83,10 +141,14 @@ function renderCustomers(customers) {
             <p class="customer-meta"><strong>Email:</strong> ${escapeHtml(customer.email)}</p>
             <p class="customer-meta"><strong>Account Number:</strong> ${escapeHtml(customer.account_number)}</p>
             <p class="customer-meta"><strong>Balance:</strong> £${customer.balance}</p>
-            <p class="customer-meta"><strong>Status:</strong> ${customer.is_active ? "Active" : "Inactive"}</p>
+            <p class="customer-meta"><strong>Status:</strong> 
+                <span class="status-pill ${customer.is_active ? "status-active" : "status-inactive"}">
+                    ${customer.is_active ? "Active" : "Inactive"}
+                </span>
+            </p>
             <div class="customer-actions">
                 <button onclick="viewCustomer(${customer.id})">View</button>
-                <button onclick="loadCustomerIntoEditForm(${customer.id}, '${escapeHtml(customer.full_name)}', '${escapeHtml(customer.email)}')">Edit</button>
+                <button onclick="loadCustomerIntoEditForm(${customer.id}, ${JSON.stringify(customer.full_name)}, ${JSON.stringify(customer.email)})">Edit</button>
                 ${customer.is_active ? `<button class="danger-btn" onclick="deactivateCustomer(${customer.id})">Deactivate</button>` : ""}
                 <button class="danger-btn" onclick="deleteCustomer(${customer.id})">Delete</button>
             </div>
@@ -94,17 +156,28 @@ function renderCustomers(customers) {
     `).join("");
 }
 
+function transactionStatusClass(type) {
+    if (type === "deposit") return "status-deposit";
+    if (type === "withdraw") return "status-withdraw";
+    if (type === "transfer") return "status-transfer";
+    return "status-active";
+}
+
 function renderTransactions(transactions) {
     if (!transactionList) return;
 
     if (transactions.length === 0) {
-        transactionList.innerHTML = "<p>No transactions found.</p>";
+        transactionList.innerHTML = `<div class="transaction-item"><p class="muted-text">No transactions found.</p></div>`;
         return;
     }
 
     transactionList.innerHTML = transactions.map((transaction) => `
         <div class="transaction-item">
-            <h3>${escapeHtml(transaction.transaction_type).toUpperCase()}</h3>
+            <h3>
+                <span class="status-pill ${transactionStatusClass(transaction.transaction_type)}">
+                    ${escapeHtml(transaction.transaction_type).toUpperCase()}
+                </span>
+            </h3>
             <p class="transaction-meta"><strong>Amount:</strong> £${transaction.amount}</p>
             <p class="transaction-meta"><strong>Description:</strong> ${escapeHtml(transaction.description || "")}</p>
             <p class="transaction-meta"><strong>From Customer ID:</strong> ${transaction.from_customer_id ?? "-"}</p>
@@ -118,7 +191,7 @@ function renderAuditLogs(logs) {
     if (!auditList) return;
 
     if (logs.length === 0) {
-        auditList.innerHTML = "<p>No audit logs found.</p>";
+        auditList.innerHTML = `<div class="audit-item"><p class="muted-text">No audit logs found.</p></div>`;
         return;
     }
 
@@ -130,6 +203,16 @@ function renderAuditLogs(logs) {
             <p class="audit-meta"><strong>Created:</strong> ${escapeHtml(log.created_at)}</p>
         </div>
     `).join("");
+
+    if (recentActivityPanel) {
+        const recent = logs.slice(0, 5);
+        recentActivityPanel.innerHTML = recent.map((log) => `
+            <div class="activity-item">
+                <div class="activity-title">${escapeHtml(log.event_type)}</div>
+                <div class="muted-text">${escapeHtml(log.details)}</div>
+            </div>
+        `).join("");
+    }
 }
 
 function renderCustomerDetail(customer) {
@@ -142,7 +225,11 @@ function renderCustomerDetail(customer) {
             <p class="customer-meta"><strong>Email:</strong> ${escapeHtml(customer.email)}</p>
             <p class="customer-meta"><strong>Account Number:</strong> ${escapeHtml(customer.account_number)}</p>
             <p class="customer-meta"><strong>Balance:</strong> £${customer.balance}</p>
-            <p class="customer-meta"><strong>Status:</strong> ${customer.is_active ? "Active" : "Inactive"}</p>
+            <p class="customer-meta"><strong>Status:</strong> 
+                <span class="status-pill ${customer.is_active ? "status-active" : "status-inactive"}">
+                    ${customer.is_active ? "Active" : "Inactive"}
+                </span>
+            </p>
         </div>
     `;
 }
@@ -343,28 +430,34 @@ transferForm?.addEventListener("submit", async (event) => {
     const amount = parseInt(document.getElementById("transfer_amount").value, 10);
     const description = document.getElementById("transfer_description").value.trim();
 
-    try {
-        const response = await fetch("/api/transactions/transfer", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                from_account_number,
-                to_account_number,
-                amount,
-                description
-            })
-        });
+    openConfirmModal(
+        "Confirm Transfer",
+        `Transfer £${amount || 0} from ${from_account_number || "source"} to ${to_account_number || "destination"}?`,
+        async () => {
+            try {
+                const response = await fetch("/api/transactions/transfer", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        from_account_number,
+                        to_account_number,
+                        amount,
+                        description
+                    })
+                });
 
-        await handleJsonResponse(response);
-        transferForm.reset();
-        showMessage("Transfer completed successfully.");
-        fetchCustomers();
-        fetchTransactions();
-        fetchAuditLogs();
-        fetchDashboardSummary();
-    } catch (error) {
-        showMessage(error.message, true);
-    }
+                await handleJsonResponse(response);
+                transferForm.reset();
+                showMessage("Transfer completed successfully.");
+                fetchCustomers();
+                fetchTransactions();
+                fetchAuditLogs();
+                fetchDashboardSummary();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        }
+    );
 });
 
 loginForm?.addEventListener("submit", async (event) => {
@@ -418,49 +511,55 @@ function loadCustomerIntoEditForm(customerId, fullName, email) {
 }
 
 async function deactivateCustomer(customerId) {
-    const confirmed = confirm("Deactivate this customer account?");
-    if (!confirmed) return;
+    openConfirmModal(
+        "Deactivate Customer",
+        "Deactivate this customer account?",
+        async () => {
+            try {
+                const response = await fetch(`/api/customers/${customerId}/deactivate`, {
+                    method: "PATCH"
+                });
 
-    try {
-        const response = await fetch(`/api/customers/${customerId}/deactivate`, {
-            method: "PATCH"
-        });
-
-        await handleJsonResponse(response);
-        showMessage("Customer deactivated successfully.");
-        fetchCustomers();
-        fetchAuditLogs();
-        fetchDashboardSummary();
-    } catch (error) {
-        showMessage(error.message, true);
-    }
+                await handleJsonResponse(response);
+                showMessage("Customer deactivated successfully.");
+                fetchCustomers();
+                fetchAuditLogs();
+                fetchDashboardSummary();
+            } catch (error) {
+                showMessage(error.message, true);
+            }
+        }
+    );
 }
 
 async function deleteCustomer(customerId) {
-    const confirmed = confirm("Delete this customer record?");
-    if (!confirmed) return;
+    openConfirmModal(
+        "Delete Customer",
+        "Delete this customer record?",
+        async () => {
+            try {
+                const response = await fetch(`/api/customers/${customerId}`, {
+                    method: "DELETE"
+                });
 
-    try {
-        const response = await fetch(`/api/customers/${customerId}`, {
-            method: "DELETE"
-        });
+                await handleJsonResponse(response);
+                showMessage("Customer deleted successfully.");
+                fetchCustomers();
+                fetchAuditLogs();
+                fetchDashboardSummary();
 
-        await handleJsonResponse(response);
-        showMessage("Customer deleted successfully.");
-        fetchCustomers();
-        fetchAuditLogs();
-        fetchDashboardSummary();
+                if (customerDetailPanel) {
+                    customerDetailPanel.innerHTML = `<p class="muted-text">Select “View” on a customer to see their current stored data.</p>`;
+                }
 
-        if (customerDetailPanel) {
-            customerDetailPanel.innerHTML = `<p class="muted-text">Select “View” on a customer to see their current stored data.</p>`;
+                document.getElementById("edit-customer-id").value = "";
+                document.getElementById("edit-full-name").value = "";
+                document.getElementById("edit-email").value = "";
+            } catch (error) {
+                showMessage(error.message, true);
+            }
         }
-
-        document.getElementById("edit-customer-id").value = "";
-        document.getElementById("edit-full-name").value = "";
-        document.getElementById("edit-email").value = "";
-    } catch (error) {
-        showMessage(error.message, true);
-    }
+    );
 }
 
 refreshBtn?.addEventListener("click", fetchCustomers);

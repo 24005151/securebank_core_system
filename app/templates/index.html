@@ -1,46 +1,56 @@
 {% extends "base.html" %}
 
 {% block title %}Dashboard - SecureBank Core System{% endblock %}
+{% block page_title %}Banking Operations Dashboard{% endblock %}
 
 {% block content %}
-<section class="dashboard-hero card">
+<section class="hero-panel">
     <div>
-        <h2>Banking Operations Dashboard</h2>
+        <h2>Operational Overview</h2>
         <p class="muted-text">
-            Manage customers, process transactions, review audit activity, and monitor key banking metrics.
+            Monitor customers, process transactions, review secure activity, and manage operational records.
         </p>
     </div>
-    <div class="hero-tag">SecureBank V4</div>
+    <div class="hero-chip">SecureBank Admin</div>
 </section>
 
-<section class="stats-grid">
-    <div class="stat-card">
-        <span class="stat-label">Total Customers</span>
-        <strong class="stat-value" id="stat-total-customers">0</strong>
+<section class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-label">Total Customers</div>
+        <div class="metric-value" id="stat-total-customers">0</div>
+        <div class="metric-bar"><span id="bar-total-customers"></span></div>
     </div>
-    <div class="stat-card">
-        <span class="stat-label">Active Customers</span>
-        <strong class="stat-value" id="stat-active-customers">0</strong>
+
+    <div class="metric-card">
+        <div class="metric-label">Active Customers</div>
+        <div class="metric-value" id="stat-active-customers">0</div>
+        <div class="metric-bar success-bar"><span id="bar-active-customers"></span></div>
     </div>
-    <div class="stat-card">
-        <span class="stat-label">Inactive Customers</span>
-        <strong class="stat-value" id="stat-inactive-customers">0</strong>
+
+    <div class="metric-card">
+        <div class="metric-label">Inactive Customers</div>
+        <div class="metric-value" id="stat-inactive-customers">0</div>
+        <div class="metric-bar warning-bar"><span id="bar-inactive-customers"></span></div>
     </div>
-    <div class="stat-card">
-        <span class="stat-label">Total Transactions</span>
-        <strong class="stat-value" id="stat-total-transactions">0</strong>
+
+    <div class="metric-card">
+        <div class="metric-label">Total Transactions</div>
+        <div class="metric-value" id="stat-total-transactions">0</div>
+        <div class="metric-bar info-bar"><span id="bar-total-transactions"></span></div>
     </div>
-    <div class="stat-card">
-        <span class="stat-label">Total Bank Balance</span>
-        <strong class="stat-value" id="stat-total-balance">£0</strong>
+
+    <div class="metric-card">
+        <div class="metric-label">Total Bank Balance</div>
+        <div class="metric-value" id="stat-total-balance">£0</div>
+        <div class="metric-bar primary-bar"><span id="bar-total-balance"></span></div>
     </div>
 </section>
 
-<section class="grid-two">
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Create Customer</h2>
-            <span class="section-badge">Customer Setup</span>
+<section class="dashboard-grid">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Create Customer</h3>
+            <span class="panel-badge">Setup</span>
         </div>
 
         <form id="customer-form">
@@ -70,10 +80,22 @@
         <p id="message" class="status-message"></p>
     </div>
 
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Customer Records</h2>
-            <span class="section-badge">Search & Manage</span>
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Recent Activity Snapshot</h3>
+            <span class="panel-badge">Live View</span>
+        </div>
+        <div id="recent-activity-panel" class="activity-list">
+            <p class="muted-text">Recent audit activity will appear here.</p>
+        </div>
+    </div>
+</section>
+
+<section id="customers-section" class="wide-panel">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Customer Records</h3>
+            <span class="panel-badge">Search & Manage</span>
         </div>
 
         <div class="toolbar-card">
@@ -82,25 +104,25 @@
             <button id="refresh-btn" type="button" class="ghost-btn">Refresh</button>
         </div>
 
-        <div id="customer-list"></div>
+        <div id="customer-list" class="table-card"></div>
     </div>
 </section>
 
-<section class="grid-two">
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Customer Detail View</h2>
-            <span class="section-badge">Access Request Support</span>
+<section class="dashboard-grid">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Customer Detail View</h3>
+            <span class="panel-badge">Access Request</span>
         </div>
         <div id="customer-detail-panel">
             <p class="muted-text">Select “View” on a customer to see their current stored data.</p>
         </div>
     </div>
 
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Edit Customer</h2>
-            <span class="section-badge">Update Customer Data</span>
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Edit Customer</h3>
+            <span class="panel-badge">Update</span>
         </div>
 
         <form id="edit-customer-form">
@@ -123,11 +145,11 @@
     </div>
 </section>
 
-<section class="grid-three">
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Deposit</h2>
-            <span class="section-badge green-badge">Funds In</span>
+<section class="three-panel-grid">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Deposit</h3>
+            <span class="panel-badge badge-green">Funds In</span>
         </div>
 
         <form id="deposit-form">
@@ -150,10 +172,10 @@
         </form>
     </div>
 
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Withdraw</h2>
-            <span class="section-badge orange-badge">Funds Out</span>
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Withdraw</h3>
+            <span class="panel-badge badge-orange">Funds Out</span>
         </div>
 
         <form id="withdraw-form">
@@ -176,10 +198,10 @@
         </form>
     </div>
 
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Transfer</h2>
-            <span class="section-badge blue-badge">Internal Move</span>
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Transfer</h3>
+            <span class="panel-badge badge-blue">Internal Move</span>
         </div>
 
         <form id="transfer-form">
@@ -208,11 +230,11 @@
     </div>
 </section>
 
-<section class="grid-two">
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Transaction History</h2>
-            <span class="section-badge">Activity Feed</span>
+<section id="transactions-section" class="dashboard-grid">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Transaction History</h3>
+            <span class="panel-badge">Activity Feed</span>
         </div>
 
         <div class="toolbar-card">
@@ -227,20 +249,20 @@
             <button id="refresh-transactions-btn" type="button" class="ghost-btn">Refresh</button>
         </div>
 
-        <div id="transaction-list"></div>
+        <div id="transaction-list" class="table-card"></div>
     </div>
 
-    <div class="card section-card">
-        <div class="section-title-row">
-            <h2>Audit Log</h2>
-            <span class="section-badge">Security Monitoring</span>
+    <div id="audit-section" class="panel-card">
+        <div class="panel-header">
+            <h3>Audit Log</h3>
+            <span class="panel-badge">Security Monitoring</span>
         </div>
 
         <div class="toolbar-card single-toolbar">
             <button id="refresh-audit-btn" type="button" class="ghost-btn">Refresh</button>
         </div>
 
-        <div id="audit-list"></div>
+        <div id="audit-list" class="table-card"></div>
     </div>
 </section>
 {% endblock %}
