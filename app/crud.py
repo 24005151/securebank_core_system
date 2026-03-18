@@ -57,6 +57,20 @@ def seed_default_staff_user(db: Session):
         db.commit()
 
 
+def authenticate_staff_user(db: Session, username: str, password: str):
+    user = db.query(models.StaffUser).filter(
+        models.StaffUser.username == username.strip()
+    ).first()
+
+    if not user:
+        return None
+
+    if not verify_password(password, user.password):
+        return None
+
+    return user
+
+
 def generate_unique_account_number(db: Session) -> str:
     while True:
         account_number = f"SB{random.randint(10000000, 99999999)}"
@@ -105,12 +119,44 @@ def seed_demo_customers_bulk(db: Session):
 
     if len(created_customers) >= 8:
         demo_transactions = [
-            models.Transaction(transaction_type="deposit", amount=500, description="Initial demo deposit", to_customer_id=created_customers[0].id),
-            models.Transaction(transaction_type="withdraw", amount=150, description="Demo cash withdrawal", from_customer_id=created_customers[1].id),
-            models.Transaction(transaction_type="transfer", amount=200, description="Demo transfer 1", from_customer_id=created_customers[2].id, to_customer_id=created_customers[3].id),
-            models.Transaction(transaction_type="deposit", amount=750, description="Salary top-up demo", to_customer_id=created_customers[4].id),
-            models.Transaction(transaction_type="transfer", amount=300, description="Demo transfer 2", from_customer_id=created_customers[5].id, to_customer_id=created_customers[6].id),
-            models.Transaction(transaction_type="withdraw", amount=100, description="ATM withdrawal demo", from_customer_id=created_customers[7].id),
+            models.Transaction(
+                transaction_type="deposit",
+                amount=500,
+                description="Initial demo deposit",
+                to_customer_id=created_customers[0].id
+            ),
+            models.Transaction(
+                transaction_type="withdraw",
+                amount=150,
+                description="Demo cash withdrawal",
+                from_customer_id=created_customers[1].id
+            ),
+            models.Transaction(
+                transaction_type="transfer",
+                amount=200,
+                description="Demo transfer 1",
+                from_customer_id=created_customers[2].id,
+                to_customer_id=created_customers[3].id
+            ),
+            models.Transaction(
+                transaction_type="deposit",
+                amount=750,
+                description="Salary top-up demo",
+                to_customer_id=created_customers[4].id
+            ),
+            models.Transaction(
+                transaction_type="transfer",
+                amount=300,
+                description="Demo transfer 2",
+                from_customer_id=created_customers[5].id,
+                to_customer_id=created_customers[6].id
+            ),
+            models.Transaction(
+                transaction_type="withdraw",
+                amount=100,
+                description="ATM withdrawal demo",
+                from_customer_id=created_customers[7].id
+            ),
         ]
 
         created_customers[0].balance += 500
@@ -133,20 +179,6 @@ def seed_demo_customers_bulk(db: Session):
     )
 
 
-def authenticate_staff_user(db: Session, username: str, password: str):
-    user = db.query(models.StaffUser).filter(
-        models.StaffUser.username == username.strip()
-    ).first()
-
-    if not user:
-        return None
-
-    if not verify_password(password, user.password):
-        return None
-
-    return user
-
-
 def get_dashboard_summary(db: Session):
     total_customers = db.query(func.count(models.Customer.id)).scalar() or 0
     active_customers = db.query(func.count(models.Customer.id)).filter(
@@ -156,7 +188,9 @@ def get_dashboard_summary(db: Session):
         models.Customer.is_active.is_(False)
     ).scalar() or 0
     total_transactions = db.query(func.count(models.Transaction.id)).scalar() or 0
-    total_balance = db.query(func.coalesce(func.sum(models.Customer.balance), 0)).scalar() or 0
+    total_balance = db.query(
+        func.coalesce(func.sum(models.Customer.balance), 0)
+    ).scalar() or 0
 
     return {
         "total_customers": total_customers,
@@ -184,7 +218,9 @@ def get_all_customers(db: Session, search: str | None = None):
 
 
 def get_customer_by_email(db: Session, email: str):
-    return db.query(models.Customer).filter(models.Customer.email == email).first()
+    return db.query(models.Customer).filter(
+        models.Customer.email == email
+    ).first()
 
 
 def get_customer_by_account_number(db: Session, account_number: str):
@@ -194,7 +230,9 @@ def get_customer_by_account_number(db: Session, account_number: str):
 
 
 def get_customer_by_id(db: Session, customer_id: int):
-    return db.query(models.Customer).filter(models.Customer.id == customer_id).first()
+    return db.query(models.Customer).filter(
+        models.Customer.id == customer_id
+    ).first()
 
 
 def create_customer(db: Session, customer: schemas.CustomerCreate, actor: str):
@@ -218,7 +256,12 @@ def create_customer(db: Session, customer: schemas.CustomerCreate, actor: str):
     return db_customer
 
 
-def update_customer(db: Session, customer_id: int, payload: schemas.CustomerUpdate, actor: str):
+def update_customer(
+    db: Session,
+    customer_id: int,
+    payload: schemas.CustomerUpdate,
+    actor: str
+):
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return None, "Customer not found."
@@ -315,7 +358,9 @@ def get_all_transactions(
     query = db.query(models.Transaction)
 
     if transaction_type:
-        query = query.filter(models.Transaction.transaction_type == transaction_type)
+        query = query.filter(
+            models.Transaction.transaction_type == transaction_type
+        )
 
     transactions = query.order_by(models.Transaction.id.desc()).all()
 
@@ -332,10 +377,16 @@ def get_all_transactions(
 
 
 def get_all_audit_logs(db: Session):
-    return db.query(models.AuditLog).order_by(models.AuditLog.id.desc()).all()
+    return db.query(models.AuditLog).order_by(
+        models.AuditLog.id.desc()
+    ).all()
 
 
-def deposit_money(db: Session, request: schemas.DepositWithdrawRequest, actor: str):
+def deposit_money(
+    db: Session,
+    request: schemas.DepositWithdrawRequest,
+    actor: str
+):
     customer = get_customer_by_account_number(db, request.account_number.strip())
     if not customer:
         return None, "Customer account not found."
@@ -364,7 +415,11 @@ def deposit_money(db: Session, request: schemas.DepositWithdrawRequest, actor: s
     return transaction, None
 
 
-def withdraw_money(db: Session, request: schemas.DepositWithdrawRequest, actor: str):
+def withdraw_money(
+    db: Session,
+    request: schemas.DepositWithdrawRequest,
+    actor: str
+):
     customer = get_customer_by_account_number(db, request.account_number.strip())
     if not customer:
         return None, "Customer account not found."

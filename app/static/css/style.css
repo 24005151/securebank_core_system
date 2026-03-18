@@ -377,7 +377,7 @@ button:active {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     padding: 14px;
     background: #f8fbff;
     border: 1px solid var(--border);
@@ -393,6 +393,60 @@ button:active {
 
 .single-toolbar {
     justify-content: flex-end;
+}
+
+.search-suggest-wrapper {
+    position: relative;
+    min-width: 260px;
+    flex: 1 1 260px;
+}
+
+.search-suggestions {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+    z-index: 50;
+    overflow: hidden;
+}
+
+.search-suggestions.hidden {
+    display: none;
+}
+
+.suggestion-item {
+    width: 100%;
+    text-align: left;
+    border-radius: 0;
+    background: white;
+    color: var(--text);
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover {
+    background: #f5f8ff;
+    opacity: 1;
+}
+
+.suggestion-name {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.suggestion-meta {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
 }
 
 .table-card {
@@ -562,7 +616,8 @@ button:active {
     }
 
     .toolbar-card input,
-    .toolbar-card select {
+    .toolbar-card select,
+    .search-suggest-wrapper {
         width: 100%;
         min-width: 0;
     }

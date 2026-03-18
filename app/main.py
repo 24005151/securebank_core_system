@@ -16,7 +16,11 @@ finally:
     db.close()
 
 app = FastAPI(title="SecureBank Core System")
-app.add_middleware(SessionMiddleware, secret_key="securebank-dev-secret-key")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="securebank-dev-secret-key"
+)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

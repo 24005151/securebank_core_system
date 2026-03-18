@@ -101,7 +101,10 @@
         </div>
 
         <div class="toolbar-card">
-            <input type="text" id="customer-search" placeholder="Search by name, email, or account">
+            <div class="search-suggest-wrapper">
+                <input type="text" id="customer-search" placeholder="Search by name, email, or account" autocomplete="off">
+                <div id="customer-search-suggestions" class="search-suggestions hidden"></div>
+            </div>
             <button id="search-customers-btn" type="button" class="secondary-btn">Search</button>
             <button id="refresh-btn" type="button" class="ghost-btn">Refresh</button>
         </div>
@@ -148,7 +151,7 @@
         <div class="activity-item">
             <div class="activity-title">Role Access</div>
             <div class="muted-text">
-                Editing, deactivating, deleting customers, and viewing audit logs are manager-only actions.
+                Editing, deactivating, activating, deleting customers, and viewing audit logs are manager-only actions.
             </div>
         </div>
     </div>

@@ -23,6 +23,9 @@ const filterTransactionsBtn = document.getElementById("filter-transactions-btn")
 const refreshAuditBtn = document.getElementById("refresh-audit-btn");
 const logoutBtn = document.getElementById("logout-btn");
 
+const customerSearchInput = document.getElementById("customer-search");
+const customerSearchSuggestions = document.getElementById("customer-search-suggestions");
+
 const confirmModal = document.getElementById("confirm-modal");
 const modalTitle = document.getElementById("modal-title");
 const modalMessage = document.getElementById("modal-message");
@@ -30,6 +33,7 @@ const modalConfirm = document.getElementById("modal-confirm");
 const modalCancel = document.getElementById("modal-cancel");
 
 let confirmAction = null;
+let cachedCustomers = [];
 window.currentUserRole = "staff";
 
 function showMessage(message, isError = false) {
@@ -65,6 +69,19 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function formatDateTime(value) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
 function openConfirmModal(title, message, onConfirm) {
     if (!confirmModal) return;
     modalTitle.textContent = title;
@@ -93,6 +110,69 @@ confirmModal?.addEventListener("click", (event) => {
         closeConfirmModal();
     }
 });
+
+function hideCustomerSuggestions() {
+    if (!customerSearchSuggestions) return;
+    customerSearchSuggestions.classList.add("hidden");
+    customerSearchSuggestions.innerHTML = "";
+}
+
+function renderCustomerSuggestions(matches) {
+    if (!customerSearchSuggestions) return;
+
+    if (!matches.length) {
+        hideCustomerSuggestions();
+        return;
+    }
+
+    customerSearchSuggestions.innerHTML = matches.map((customer) => `
+        <button
+            type="button"
+            class="suggestion-item"
+            data-customer-id="${customer.id}"
+            data-account-number="${escapeHtml(customer.account_number)}"
+        >
+            <span class="suggestion-name">${escapeHtml(customer.full_name)}</span>
+            <span class="suggestion-meta">${escapeHtml(customer.account_number)} · ${escapeHtml(customer.email)}</span>
+        </button>
+    `).join("");
+
+    customerSearchSuggestions.classList.remove("hidden");
+
+    customerSearchSuggestions.querySelectorAll(".suggestion-item").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const customerId = Number(button.dataset.customerId);
+            const accountNumber = button.dataset.accountNumber || "";
+            if (customerSearchInput) {
+                customerSearchInput.value = accountNumber;
+            }
+            hideCustomerSuggestions();
+            await viewCustomer(customerId);
+            fetchCustomers();
+        });
+    });
+}
+
+function updateLiveCustomerSuggestions() {
+    if (!customerSearchInput) return;
+
+    const value = customerSearchInput.value.trim().toLowerCase();
+
+    if (!value) {
+        hideCustomerSuggestions();
+        return;
+    }
+
+    const matches = cachedCustomers.filter((customer) => {
+        return (
+            customer.full_name.toLowerCase().includes(value) ||
+            customer.email.toLowerCase().includes(value) ||
+            customer.account_number.toLowerCase().includes(value)
+        );
+    }).slice(0, 8);
+
+    renderCustomerSuggestions(matches);
+}
 
 function renderDashboardSummary(summary) {
     const map = {
@@ -143,6 +223,8 @@ function renderDashboardSummary(summary) {
 function renderCustomers(customers) {
     if (!customerList) return;
 
+    cachedCustomers = customers;
+
     if (customers.length === 0) {
         customerList.innerHTML = `<div class="customer-item"><p class="muted-text">No customer records found.</p></div>`;
         return;
@@ -170,6 +252,8 @@ function renderCustomers(customers) {
             </div>
         </div>
     `).join("");
+
+    updateLiveCustomerSuggestions();
 }
 
 function transactionStatusClass(type) {
@@ -198,7 +282,7 @@ function renderTransactions(transactions) {
             <p class="transaction-meta"><strong>Description:</strong> ${escapeHtml(transaction.description || "")}</p>
             <p class="transaction-meta"><strong>From Customer ID:</strong> ${transaction.from_customer_id ?? "-"}</p>
             <p class="transaction-meta"><strong>To Customer ID:</strong> ${transaction.to_customer_id ?? "-"}</p>
-            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(transaction.created_at)}</p>
+            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(transaction.created_at))}</p>
         </div>
     `).join("");
 }
@@ -226,7 +310,7 @@ function renderCustomerTransactions(transactions, accountNumber) {
             <p class="transaction-meta"><strong>Description:</strong> ${escapeHtml(transaction.description || "")}</p>
             <p class="transaction-meta"><strong>From Customer ID:</strong> ${transaction.from_customer_id ?? "-"}</p>
             <p class="transaction-meta"><strong>To Customer ID:</strong> ${transaction.to_customer_id ?? "-"}</p>
-            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(transaction.created_at)}</p>
+            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(transaction.created_at))}</p>
         </div>
     `).join("");
 }
@@ -244,7 +328,7 @@ function renderAuditLogs(logs) {
             <h3>${escapeHtml(log.event_type)}</h3>
             <p class="audit-meta"><strong>Actor:</strong> ${escapeHtml(log.actor)}</p>
             <p class="audit-meta"><strong>Details:</strong> ${escapeHtml(log.details)}</p>
-            <p class="audit-meta"><strong>Created:</strong> ${escapeHtml(log.created_at)}</p>
+            <p class="audit-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(log.created_at))}</p>
         </div>
     `).join("");
 
@@ -254,6 +338,7 @@ function renderAuditLogs(logs) {
             <div class="activity-item">
                 <div class="activity-title">${escapeHtml(log.event_type)}</div>
                 <div class="muted-text">${escapeHtml(log.details)}</div>
+                <div class="muted-text">${escapeHtml(formatDateTime(log.created_at))}</div>
             </div>
         `).join("");
     }
@@ -314,7 +399,7 @@ async function fetchDashboardSummary() {
 async function fetchCustomers() {
     if (!customerList) return;
 
-    const searchValue = document.getElementById("customer-search")?.value.trim() || "";
+    const searchValue = customerSearchInput?.value.trim() || "";
     const url = searchValue
         ? `/api/customers?search=${encodeURIComponent(searchValue)}`
         : "/api/customers";
@@ -688,8 +773,32 @@ async function deleteCustomer(customerId) {
     );
 }
 
-refreshBtn?.addEventListener("click", fetchCustomers);
-searchCustomersBtn?.addEventListener("click", fetchCustomers);
+customerSearchInput?.addEventListener("input", () => {
+    updateLiveCustomerSuggestions();
+});
+
+customerSearchInput?.addEventListener("focus", () => {
+    updateLiveCustomerSuggestions();
+});
+
+document.addEventListener("click", (event) => {
+    const withinSearch = event.target.closest(".search-suggest-wrapper");
+    if (!withinSearch) {
+        hideCustomerSuggestions();
+    }
+});
+
+refreshBtn?.addEventListener("click", () => {
+    if (customerSearchInput) customerSearchInput.value = "";
+    hideCustomerSuggestions();
+    fetchCustomers();
+});
+
+searchCustomersBtn?.addEventListener("click", () => {
+    hideCustomerSuggestions();
+    fetchCustomers();
+});
+
 refreshTransactionsBtn?.addEventListener("click", fetchTransactions);
 filterTransactionsBtn?.addEventListener("click", fetchTransactions);
 refreshAuditBtn?.addEventListener("click", fetchAuditLogs);
