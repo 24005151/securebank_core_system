@@ -7,18 +7,30 @@ from app.database import get_db
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
 @router.post("/login")
 def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends(get_db)):
-    user = crud.authenticate_staff_user(db, payload.username, payload.password)
+    ip_address = get_client_ip(request)
+    user, error = crud.authenticate_staff_user(db, payload.username, payload.password)
 
     if not user:
         crud.create_audit_log(
             db,
             "login_failed",
             payload.username.strip() or "unknown",
-            "Failed login attempt"
+            error or "Failed login attempt",
+            result="failure",
+            ip_address=ip_address
         )
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
+        raise HTTPException(status_code=401, detail=error or "Invalid username or password.")
 
     request.session["user"] = {
         "username": user.username,
@@ -29,7 +41,9 @@ def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends
         db,
         "login_success",
         user.username,
-        f"Successful staff login with role {user.role}"
+        f"Successful staff login with role {user.role}",
+        result="success",
+        ip_address=ip_address
     )
 
     return {
@@ -41,13 +55,8 @@ def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends
 
 @router.post("/logout")
 def logout(request: Request):
-    user = request.session.get("user")
-    if user:
-        request.session.clear()
-        return {"message": "Logged out successfully."}
-
     request.session.clear()
-    return {"message": "No active session. Logged out safely."}
+    return {"message": "Logged out successfully."}
 
 
 @router.get("/me")

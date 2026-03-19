@@ -13,6 +13,9 @@ class StaffUser(Base):
     username = Column(String(50), nullable=False, unique=True, index=True)
     password = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False, default="staff")
+    failed_login_attempts = Column(Integer, nullable=False, default=0)
+    is_locked = Column(Boolean, nullable=False, default=False)
+    last_failed_login_at = Column(DateTime, nullable=True)
 
 
 class Customer(Base):
@@ -24,6 +27,8 @@ class Customer(Base):
     account_number = Column(String(20), nullable=False, unique=True, index=True)
     balance = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     outgoing_transactions = relationship(
         "Transaction",
@@ -44,6 +49,7 @@ class Transaction(Base):
     transaction_type = Column(String(20), nullable=False)
     amount = Column(Integer, nullable=False)
     description = Column(String(255), nullable=True)
+    risk_flag = Column(Boolean, nullable=False, default=False)
 
     from_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     to_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
@@ -69,4 +75,6 @@ class AuditLog(Base):
     event_type = Column(String(50), nullable=False)
     actor = Column(String(50), nullable=False)
     details = Column(String(255), nullable=False)
+    result = Column(String(20), nullable=False, default="success")
+    ip_address = Column(String(64), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

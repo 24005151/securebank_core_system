@@ -19,7 +19,8 @@ app = FastAPI(title="SecureBank Core System")
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key="securebank-dev-secret-key"
+    secret_key="securebank-dev-secret-key",
+    max_age=60 * 20
 )
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

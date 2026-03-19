@@ -34,6 +34,18 @@
     </div>
 
     <div class="metric-card">
+        <div class="metric-label">Suspicious Transactions</div>
+        <div class="metric-value" id="stat-suspicious-transactions">0</div>
+        <div class="metric-bar warning-bar"><span id="bar-suspicious-transactions"></span></div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Low Balance Customers</div>
+        <div class="metric-value" id="stat-low-balance-customers">0</div>
+        <div class="metric-bar warning-bar"><span id="bar-low-balance-customers"></span></div>
+    </div>
+
+    <div class="metric-card">
         <div class="metric-label">Total Transactions</div>
         <div class="metric-value" id="stat-total-transactions">0</div>
         <div class="metric-bar info-bar"><span id="bar-total-transactions"></span></div>
@@ -69,13 +81,6 @@
                 <input type="number" id="balance" min="0" value="0" required>
             </div>
 
-            <div class="activity-item">
-                <div class="activity-title">Account Number Generation</div>
-                <div class="muted-text">
-                    A unique free account number is generated automatically when a new customer is created.
-                </div>
-            </div>
-
             <button type="submit" class="primary-btn">Create Customer</button>
         </form>
 
@@ -101,33 +106,42 @@
         </div>
 
         <div class="toolbar-card">
-            <div class="search-suggest-wrapper">
-                <input type="text" id="customer-search" placeholder="Search by name, email, or account" autocomplete="off">
-                <div id="customer-search-suggestions" class="search-suggestions hidden"></div>
-            </div>
+            <input type="text" id="customer-search" placeholder="Search by name, email, or account">
+            <select id="customer-status-filter">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+            </select>
+            <select id="customer-sort-filter">
+                <option value="">Default Sort</option>
+                <option value="balance_desc">Balance High-Low</option>
+                <option value="balance_asc">Balance Low-High</option>
+                <option value="name_asc">Name A-Z</option>
+            </select>
             <button id="search-customers-btn" type="button" class="secondary-btn">Search</button>
             <button id="refresh-btn" type="button" class="ghost-btn">Refresh</button>
+            <button id="export-customers-btn" type="button" class="ghost-btn">Export Customers CSV</button>
         </div>
 
         <div id="customer-list" class="table-card"></div>
     </div>
 </section>
 
-<section class="dashboard-grid">
+<section class="dashboard-grid" id="customer-view-section">
     <div class="panel-card">
         <div class="panel-header">
             <h3>Customer Detail View</h3>
-            <span class="panel-badge">Access Request</span>
+            <span class="panel-badge">View</span>
         </div>
         <div id="customer-detail-panel">
-            <p class="muted-text">Select “View” on a customer to see their current stored data.</p>
+            <p class="muted-text">Select “View” on a customer to see their stored data.</p>
         </div>
     </div>
 
     <div class="panel-card">
         <div class="panel-header">
             <h3>Edit Customer</h3>
-            <span class="panel-badge">Update</span>
+            <span class="panel-badge">Manager Only</span>
         </div>
 
         <form id="edit-customer-form">
@@ -147,11 +161,18 @@
         </form>
 
         <p id="edit-message" class="status-message"></p>
+    </div>
+</section>
 
-        <div class="activity-item">
-            <div class="activity-title">Role Access</div>
-            <div class="muted-text">
-                Editing, deactivating, activating, deleting customers, and viewing audit logs are manager-only actions.
+<section class="wide-panel">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Selected Customer Transactions</h3>
+            <span class="panel-badge">History</span>
+        </div>
+        <div id="customer-transactions-panel" class="table-card">
+            <div class="transaction-item">
+                <p class="muted-text">Select “View” on a customer to load transactions.</p>
             </div>
         </div>
     </div>
@@ -160,12 +181,12 @@
 <section class="wide-panel">
     <div class="panel-card">
         <div class="panel-header">
-            <h3>Selected Customer Transactions</h3>
-            <span class="panel-badge">Customer Activity</span>
+            <h3>Customer Timeline</h3>
+            <span class="panel-badge">Timeline</span>
         </div>
-        <div id="customer-transactions-panel" class="table-card">
+        <div id="customer-timeline-panel" class="table-card">
             <div class="transaction-item">
-                <p class="muted-text">Select “View” on a customer to load transactions for that customer.</p>
+                <p class="muted-text">Select “View” on a customer to load timeline events.</p>
             </div>
         </div>
     </div>
@@ -273,6 +294,7 @@
             </select>
             <button id="filter-transactions-btn" type="button" class="secondary-btn">Filter</button>
             <button id="refresh-transactions-btn" type="button" class="ghost-btn">Refresh</button>
+            <button id="export-transactions-btn" type="button" class="ghost-btn">Export Transactions CSV</button>
         </div>
 
         <div id="transaction-list" class="table-card"></div>

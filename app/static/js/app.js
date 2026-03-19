@@ -10,6 +10,7 @@ const transactionList = document.getElementById("transaction-list");
 const auditList = document.getElementById("audit-list");
 const customerDetailPanel = document.getElementById("customer-detail-panel");
 const customerTransactionsPanel = document.getElementById("customer-transactions-panel");
+const customerTimelinePanel = document.getElementById("customer-timeline-panel");
 const recentActivityPanel = document.getElementById("recent-activity-panel");
 
 const messageBox = document.getElementById("message");
@@ -22,9 +23,12 @@ const refreshTransactionsBtn = document.getElementById("refresh-transactions-btn
 const filterTransactionsBtn = document.getElementById("filter-transactions-btn");
 const refreshAuditBtn = document.getElementById("refresh-audit-btn");
 const logoutBtn = document.getElementById("logout-btn");
+const exportCustomersBtn = document.getElementById("export-customers-btn");
+const exportTransactionsBtn = document.getElementById("export-transactions-btn");
 
 const customerSearchInput = document.getElementById("customer-search");
-const customerSearchSuggestions = document.getElementById("customer-search-suggestions");
+const customerStatusFilter = document.getElementById("customer-status-filter");
+const customerSortFilter = document.getElementById("customer-sort-filter");
 
 const confirmModal = document.getElementById("confirm-modal");
 const modalTitle = document.getElementById("modal-title");
@@ -32,9 +36,8 @@ const modalMessage = document.getElementById("modal-message");
 const modalConfirm = document.getElementById("modal-confirm");
 const modalCancel = document.getElementById("modal-cancel");
 
-let confirmAction = null;
-let cachedCustomers = [];
 window.currentUserRole = "staff";
+let confirmAction = null;
 
 function showMessage(message, isError = false) {
     if (!messageBox) return;
@@ -58,9 +61,6 @@ function showLoginMessage(message, isError = false) {
     if (!loginMessageBox) return;
     loginMessageBox.textContent = message;
     loginMessageBox.style.color = isError ? "crimson" : "green";
-    setTimeout(() => {
-        loginMessageBox.textContent = "";
-    }, 3000);
 }
 
 function escapeHtml(text) {
@@ -111,121 +111,65 @@ confirmModal?.addEventListener("click", (event) => {
     }
 });
 
-function hideCustomerSuggestions() {
-    if (!customerSearchSuggestions) return;
-    customerSearchSuggestions.classList.add("hidden");
-    customerSearchSuggestions.innerHTML = "";
-}
-
-function renderCustomerSuggestions(matches) {
-    if (!customerSearchSuggestions) return;
-
-    if (!matches.length) {
-        hideCustomerSuggestions();
-        return;
+async function handleJsonResponse(response) {
+    let data;
+    try {
+        data = await response.json();
+    } catch {
+        data = {};
     }
 
-    customerSearchSuggestions.innerHTML = matches.map((customer) => `
-        <button
-            type="button"
-            class="suggestion-item"
-            data-customer-id="${customer.id}"
-            data-account-number="${escapeHtml(customer.account_number)}"
-        >
-            <span class="suggestion-name">${escapeHtml(customer.full_name)}</span>
-            <span class="suggestion-meta">${escapeHtml(customer.account_number)} · ${escapeHtml(customer.email)}</span>
-        </button>
-    `).join("");
-
-    customerSearchSuggestions.classList.remove("hidden");
-
-    customerSearchSuggestions.querySelectorAll(".suggestion-item").forEach((button) => {
-        button.addEventListener("click", async () => {
-            const customerId = Number(button.dataset.customerId);
-            const accountNumber = button.dataset.accountNumber || "";
-            if (customerSearchInput) {
-                customerSearchInput.value = accountNumber;
-            }
-            hideCustomerSuggestions();
-            await viewCustomer(customerId);
-            fetchCustomers();
-        });
-    });
-}
-
-function updateLiveCustomerSuggestions() {
-    if (!customerSearchInput) return;
-
-    const value = customerSearchInput.value.trim().toLowerCase();
-
-    if (!value) {
-        hideCustomerSuggestions();
-        return;
+    if (!response.ok) {
+        if (response.status === 401) {
+            window.location.href = "/login";
+        }
+        throw new Error(data.detail || "Request failed.");
     }
 
-    const matches = cachedCustomers.filter((customer) => {
-        return (
-            customer.full_name.toLowerCase().includes(value) ||
-            customer.email.toLowerCase().includes(value) ||
-            customer.account_number.toLowerCase().includes(value)
-        );
-    }).slice(0, 8);
+    return data;
+}
 
-    renderCustomerSuggestions(matches);
+async function fetchCurrentUser() {
+    try {
+        const response = await fetch("/api/auth/me");
+        const user = await handleJsonResponse(response);
+        window.currentUserRole = user.role || "staff";
+    } catch (_) {
+        window.currentUserRole = "staff";
+    }
 }
 
 function renderDashboardSummary(summary) {
-    const map = {
+    const values = {
         "stat-total-customers": summary.total_customers,
         "stat-active-customers": summary.active_customers,
         "stat-inactive-customers": summary.inactive_customers,
+        "stat-suspicious-transactions": summary.suspicious_transactions,
+        "stat-low-balance-customers": summary.low_balance_customers,
         "stat-total-transactions": summary.total_transactions,
         "stat-total-balance": `£${summary.total_balance}`
     };
 
-    Object.entries(map).forEach(([id, value]) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = value;
+    Object.entries(values).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
     });
+}
 
-    const safePercent = (value, total) => {
-        if (!total || total <= 0) return "12%";
-        return `${Math.max(12, Math.min(100, Math.round((value / total) * 100)))}%`;
-    };
-
-    const totalCustomers = summary.total_customers || 0;
-    const totalTransactions = summary.total_transactions || 0;
-    const totalBalance = summary.total_balance || 0;
-
-    const barTotalCustomers = document.getElementById("bar-total-customers");
-    const barActiveCustomers = document.getElementById("bar-active-customers");
-    const barInactiveCustomers = document.getElementById("bar-inactive-customers");
-    const barTotalTransactions = document.getElementById("bar-total-transactions");
-    const barTotalBalance = document.getElementById("bar-total-balance");
-
-    if (barTotalCustomers) {
-        barTotalCustomers.style.width = safePercent(totalCustomers, Math.max(totalCustomers, 10));
-    }
-    if (barActiveCustomers) {
-        barActiveCustomers.style.width = safePercent(summary.active_customers, totalCustomers || 1);
-    }
-    if (barInactiveCustomers) {
-        barInactiveCustomers.style.width = safePercent(summary.inactive_customers, totalCustomers || 1);
-    }
-    if (barTotalTransactions) {
-        barTotalTransactions.style.width = safePercent(totalTransactions, Math.max(totalTransactions, 10));
-    }
-    if (barTotalBalance) {
-        barTotalBalance.style.width = safePercent(totalBalance, Math.max(totalBalance, 1000));
+async function fetchDashboardSummary() {
+    try {
+        const response = await fetch("/api/dashboard-summary");
+        const summary = await handleJsonResponse(response);
+        renderDashboardSummary(summary);
+    } catch (error) {
+        showMessage(error.message, true);
     }
 }
 
 function renderCustomers(customers) {
     if (!customerList) return;
 
-    cachedCustomers = customers;
-
-    if (customers.length === 0) {
+    if (!customers.length) {
         customerList.innerHTML = `<div class="customer-item"><p class="muted-text">No customer records found.</p></div>`;
         return;
     }
@@ -243,104 +187,38 @@ function renderCustomers(customers) {
                     ${customer.is_active ? "Active" : "Inactive"}
                 </span>
             </p>
+            <p class="customer-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(customer.created_at))}</p>
             <div class="customer-actions">
-                <button onclick="viewCustomer(${customer.id})">View</button>
-                ${managerActions ? `<button onclick="startEditCustomer(${customer.id})">Edit</button>` : ""}
-                ${managerActions && customer.is_active ? `<button class="danger-btn" onclick="deactivateCustomer(${customer.id})">Deactivate</button>` : ""}
-                ${managerActions && !customer.is_active ? `<button onclick="reactivateCustomer(${customer.id})">Activate</button>` : ""}
-                ${managerActions ? `<button class="danger-btn" onclick="deleteCustomer(${customer.id})">Delete</button>` : ""}
+                <button type="button" onclick="viewCustomer(${customer.id})">View</button>
+                ${managerActions ? `<button type="button" onclick="startEditCustomer(${customer.id})">Edit</button>` : ""}
+                ${managerActions && customer.is_active ? `<button type="button" class="danger-btn" onclick="deactivateCustomer(${customer.id})">Deactivate</button>` : ""}
+                ${managerActions && !customer.is_active ? `<button type="button" onclick="reactivateCustomer(${customer.id})">Activate</button>` : ""}
+                ${managerActions ? `<button type="button" class="danger-btn" onclick="deleteCustomer(${customer.id})">Delete</button>` : ""}
             </div>
         </div>
     `).join("");
-
-    updateLiveCustomerSuggestions();
 }
 
-function transactionStatusClass(type) {
-    if (type === "deposit") return "status-deposit";
-    if (type === "withdraw") return "status-withdraw";
-    if (type === "transfer") return "status-transfer";
-    return "status-active";
-}
+async function fetchCustomers() {
+    if (!customerList) return;
 
-function renderTransactions(transactions) {
-    if (!transactionList) return;
+    const search = customerSearchInput?.value.trim() || "";
+    const status = customerStatusFilter?.value || "";
+    const sortBy = customerSortFilter?.value || "";
 
-    if (transactions.length === 0) {
-        transactionList.innerHTML = `<div class="transaction-item"><p class="muted-text">No transactions found.</p></div>`;
-        return;
-    }
+    const params = new URLSearchParams();
+    if (search) params.append("search", search);
+    if (status) params.append("status", status);
+    if (sortBy) params.append("sort_by", sortBy);
 
-    transactionList.innerHTML = transactions.map((transaction) => `
-        <div class="transaction-item">
-            <h3>
-                <span class="status-pill ${transactionStatusClass(transaction.transaction_type)}">
-                    ${escapeHtml(transaction.transaction_type).toUpperCase()}
-                </span>
-            </h3>
-            <p class="transaction-meta"><strong>Amount:</strong> £${transaction.amount}</p>
-            <p class="transaction-meta"><strong>Description:</strong> ${escapeHtml(transaction.description || "")}</p>
-            <p class="transaction-meta"><strong>From Customer ID:</strong> ${transaction.from_customer_id ?? "-"}</p>
-            <p class="transaction-meta"><strong>To Customer ID:</strong> ${transaction.to_customer_id ?? "-"}</p>
-            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(transaction.created_at))}</p>
-        </div>
-    `).join("");
-}
+    const url = params.toString() ? `/api/customers?${params.toString()}` : "/api/customers";
 
-function renderCustomerTransactions(transactions, accountNumber) {
-    if (!customerTransactionsPanel) return;
-
-    if (transactions.length === 0) {
-        customerTransactionsPanel.innerHTML = `
-            <div class="transaction-item">
-                <p class="muted-text">No transactions found for account ${escapeHtml(accountNumber)}.</p>
-            </div>
-        `;
-        return;
-    }
-
-    customerTransactionsPanel.innerHTML = transactions.map((transaction) => `
-        <div class="transaction-item">
-            <h3>
-                <span class="status-pill ${transactionStatusClass(transaction.transaction_type)}">
-                    ${escapeHtml(transaction.transaction_type).toUpperCase()}
-                </span>
-            </h3>
-            <p class="transaction-meta"><strong>Amount:</strong> £${transaction.amount}</p>
-            <p class="transaction-meta"><strong>Description:</strong> ${escapeHtml(transaction.description || "")}</p>
-            <p class="transaction-meta"><strong>From Customer ID:</strong> ${transaction.from_customer_id ?? "-"}</p>
-            <p class="transaction-meta"><strong>To Customer ID:</strong> ${transaction.to_customer_id ?? "-"}</p>
-            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(transaction.created_at))}</p>
-        </div>
-    `).join("");
-}
-
-function renderAuditLogs(logs) {
-    if (!auditList) return;
-
-    if (logs.length === 0) {
-        auditList.innerHTML = `<div class="audit-item"><p class="muted-text">No audit logs found.</p></div>`;
-        return;
-    }
-
-    auditList.innerHTML = logs.map((log) => `
-        <div class="audit-item">
-            <h3>${escapeHtml(log.event_type)}</h3>
-            <p class="audit-meta"><strong>Actor:</strong> ${escapeHtml(log.actor)}</p>
-            <p class="audit-meta"><strong>Details:</strong> ${escapeHtml(log.details)}</p>
-            <p class="audit-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(log.created_at))}</p>
-        </div>
-    `).join("");
-
-    if (recentActivityPanel) {
-        const recent = logs.slice(0, 5);
-        recentActivityPanel.innerHTML = recent.map((log) => `
-            <div class="activity-item">
-                <div class="activity-title">${escapeHtml(log.event_type)}</div>
-                <div class="muted-text">${escapeHtml(log.details)}</div>
-                <div class="muted-text">${escapeHtml(formatDateTime(log.created_at))}</div>
-            </div>
-        `).join("");
+    try {
+        const response = await fetch(url);
+        const customers = await handleJsonResponse(response);
+        renderCustomers(customers);
+    } catch (error) {
+        showMessage(error.message, true);
     }
 }
 
@@ -359,73 +237,55 @@ function renderCustomerDetail(customer) {
                     ${customer.is_active ? "Active" : "Inactive"}
                 </span>
             </p>
+            <p class="customer-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(customer.created_at))}</p>
+            <p class="customer-meta"><strong>Updated:</strong> ${escapeHtml(formatDateTime(customer.updated_at))}</p>
         </div>
     `;
 }
 
-async function handleJsonResponse(response) {
-    const data = await response.json();
-
-    if (!response.ok) {
-        if (response.status === 401) {
-            window.location.href = "/login";
-        }
-        throw new Error(data.detail || "Request failed.");
-    }
-
-    return data;
+function transactionStatusClass(type) {
+    if (type === "deposit") return "status-deposit";
+    if (type === "withdraw") return "status-withdraw";
+    if (type === "transfer") return "status-transfer";
+    return "status-active";
 }
 
-async function fetchCurrentUser() {
-    try {
-        const response = await fetch("/api/auth/me");
-        const user = await handleJsonResponse(response);
-        window.currentUserRole = user.role || "staff";
-    } catch (error) {
-        window.currentUserRole = "staff";
+function renderTransactions(transactions, targetElement = transactionList, emptyText = "No transactions found.") {
+    if (!targetElement) return;
+
+    if (!transactions.length) {
+        targetElement.innerHTML = `<div class="transaction-item"><p class="muted-text">${emptyText}</p></div>`;
+        return;
     }
-}
 
-async function fetchDashboardSummary() {
-    try {
-        const response = await fetch("/api/dashboard-summary");
-        const summary = await handleJsonResponse(response);
-        renderDashboardSummary(summary);
-    } catch (error) {
-        showMessage(error.message, true);
-    }
-}
-
-async function fetchCustomers() {
-    if (!customerList) return;
-
-    const searchValue = customerSearchInput?.value.trim() || "";
-    const url = searchValue
-        ? `/api/customers?search=${encodeURIComponent(searchValue)}`
-        : "/api/customers";
-
-    try {
-        const response = await fetch(url);
-        const customers = await handleJsonResponse(response);
-        renderCustomers(customers);
-    } catch (error) {
-        showMessage(error.message, true);
-    }
+    targetElement.innerHTML = transactions.map((transaction) => `
+        <div class="transaction-item">
+            <h3>
+                <span class="status-pill ${transactionStatusClass(transaction.transaction_type)}">
+                    ${escapeHtml(transaction.transaction_type).toUpperCase()}
+                </span>
+                ${transaction.risk_flag ? '<span class="status-pill status-inactive">Flagged</span>' : ""}
+            </h3>
+            <p class="transaction-meta"><strong>Amount:</strong> £${transaction.amount}</p>
+            <p class="transaction-meta"><strong>Description:</strong> ${escapeHtml(transaction.description || "")}</p>
+            <p class="transaction-meta"><strong>From Customer ID:</strong> ${transaction.from_customer_id ?? "-"}</p>
+            <p class="transaction-meta"><strong>To Customer ID:</strong> ${transaction.to_customer_id ?? "-"}</p>
+            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(transaction.created_at))}</p>
+        </div>
+    `).join("");
 }
 
 async function fetchTransactions() {
     if (!transactionList) return;
 
-    const accountValue = document.getElementById("transaction-account-filter")?.value.trim() || "";
-    const typeValue = document.getElementById("transaction-type-filter")?.value || "";
+    const account = document.getElementById("transaction-account-filter")?.value.trim() || "";
+    const type = document.getElementById("transaction-type-filter")?.value || "";
 
     const params = new URLSearchParams();
-    if (accountValue) params.append("account_number", accountValue);
-    if (typeValue) params.append("transaction_type", typeValue);
+    if (account) params.append("account_number", account);
+    if (type) params.append("transaction_type", type);
 
-    const url = params.toString()
-        ? `/api/transactions?${params.toString()}`
-        : "/api/transactions";
+    const url = params.toString() ? `/api/transactions?${params.toString()}` : "/api/transactions";
 
     try {
         const response = await fetch(url);
@@ -437,14 +297,73 @@ async function fetchTransactions() {
 }
 
 async function fetchTransactionsForCustomer(accountNumber) {
-    if (!customerTransactionsPanel) return;
-
     try {
         const response = await fetch(`/api/transactions?account_number=${encodeURIComponent(accountNumber)}`);
         const transactions = await handleJsonResponse(response);
-        renderCustomerTransactions(transactions, accountNumber);
+        renderTransactions(
+            transactions,
+            customerTransactionsPanel,
+            `No transactions found for account ${accountNumber}.`
+        );
     } catch (error) {
         showMessage(error.message, true);
+    }
+}
+
+function renderTimeline(items) {
+    if (!customerTimelinePanel) return;
+
+    if (!items.length) {
+        customerTimelinePanel.innerHTML = `<div class="transaction-item"><p class="muted-text">No timeline events found.</p></div>`;
+        return;
+    }
+
+    customerTimelinePanel.innerHTML = items.map((item) => `
+        <div class="transaction-item">
+            <h3>${escapeHtml(String(item.event_type).replaceAll("_", " ").toUpperCase())}</h3>
+            <p class="transaction-meta"><strong>Description:</strong> ${escapeHtml(item.description)}</p>
+            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(item.created_at))}</p>
+        </div>
+    `).join("");
+}
+
+async function fetchCustomerTimeline(customerId) {
+    try {
+        const response = await fetch(`/api/customers/${customerId}/timeline`);
+        const timeline = await handleJsonResponse(response);
+        renderTimeline(timeline);
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+}
+
+function renderAuditLogs(logs) {
+    if (!auditList) return;
+
+    if (!logs.length) {
+        auditList.innerHTML = `<div class="audit-item"><p class="muted-text">No audit logs found.</p></div>`;
+        return;
+    }
+
+    auditList.innerHTML = logs.map((log) => `
+        <div class="audit-item">
+            <h3>${escapeHtml(log.event_type)}</h3>
+            <p class="audit-meta"><strong>Actor:</strong> ${escapeHtml(log.actor)}</p>
+            <p class="audit-meta"><strong>Details:</strong> ${escapeHtml(log.details)}</p>
+            <p class="audit-meta"><strong>Result:</strong> ${escapeHtml(log.result)}</p>
+            <p class="audit-meta"><strong>IP:</strong> ${escapeHtml(log.ip_address || "-")}</p>
+            <p class="audit-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(log.created_at))}</p>
+        </div>
+    `).join("");
+
+    if (recentActivityPanel) {
+        recentActivityPanel.innerHTML = logs.slice(0, 5).map((log) => `
+            <div class="activity-item">
+                <div class="activity-title">${escapeHtml(log.event_type)}</div>
+                <div class="muted-text">${escapeHtml(log.details)}</div>
+                <div class="muted-text">${escapeHtml(formatDateTime(log.created_at))}</div>
+            </div>
+        `).join("");
     }
 }
 
@@ -459,14 +378,138 @@ async function fetchAuditLogs() {
         if (window.currentUserRole === "manager") {
             showMessage(error.message, true);
         } else {
-            if (auditList) {
-                auditList.innerHTML = `<div class="audit-item"><p class="muted-text">Audit log is restricted to manager accounts.</p></div>`;
-            }
-            if (recentActivityPanel) {
-                recentActivityPanel.innerHTML = `<p class="muted-text">Recent audit activity is available to manager accounts only.</p>`;
-            }
+            auditList.innerHTML = `<div class="audit-item"><p class="muted-text">Audit log is restricted to manager accounts.</p></div>`;
         }
     }
+}
+
+async function exportFile(url, filename) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error("Export failed.");
+    }
+    const text = await response.text();
+    const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(blobUrl);
+}
+
+async function viewCustomer(customerId) {
+    try {
+        const response = await fetch(`/api/customers/${customerId}`);
+        const customer = await handleJsonResponse(response);
+
+        renderCustomerDetail(customer);
+        await fetchTransactionsForCustomer(customer.account_number);
+        await fetchCustomerTimeline(customer.id);
+
+        if (window.currentUserRole === "manager") {
+            const editId = document.getElementById("edit-customer-id");
+            const editName = document.getElementById("edit-full-name");
+            const editEmail = document.getElementById("edit-email");
+
+            if (editId) editId.value = customer.id;
+            if (editName) editName.value = customer.full_name;
+            if (editEmail) editEmail.value = customer.email;
+        }
+
+        const detailSection = document.getElementById("customer-view-section");
+        if (detailSection) {
+            detailSection.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+        }
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+}
+
+async function startEditCustomer(customerId) {
+    try {
+        const response = await fetch(`/api/customers/${customerId}`);
+        const customer = await handleJsonResponse(response);
+
+        document.getElementById("edit-customer-id").value = customer.id;
+        document.getElementById("edit-full-name").value = customer.full_name;
+        document.getElementById("edit-email").value = customer.email;
+
+        showEditMessage(`Loaded ${customer.full_name} into edit form.`);
+        document.getElementById("edit-full-name").focus();
+    } catch (error) {
+        showEditMessage(error.message, true);
+    }
+}
+
+async function deactivateCustomer(customerId) {
+    openConfirmModal("Deactivate Customer", "Deactivate this customer account?", async () => {
+        try {
+            const response = await fetch(`/api/customers/${customerId}/deactivate`, {
+                method: "PATCH"
+            });
+            await handleJsonResponse(response);
+            showMessage("Customer deactivated successfully.");
+            fetchCustomers();
+            fetchAuditLogs();
+            fetchDashboardSummary();
+        } catch (error) {
+            showMessage(error.message, true);
+        }
+    });
+}
+
+async function reactivateCustomer(customerId) {
+    openConfirmModal("Activate Customer", "Reactivate this customer account?", async () => {
+        try {
+            const response = await fetch(`/api/customers/${customerId}/reactivate`, {
+                method: "PATCH"
+            });
+            await handleJsonResponse(response);
+            showMessage("Customer activated successfully.");
+            fetchCustomers();
+            fetchAuditLogs();
+            fetchDashboardSummary();
+        } catch (error) {
+            showMessage(error.message, true);
+        }
+    });
+}
+
+async function deleteCustomer(customerId) {
+    openConfirmModal("Delete Customer", "Delete this customer record?", async () => {
+        try {
+            const response = await fetch(`/api/customers/${customerId}`, {
+                method: "DELETE"
+            });
+            await handleJsonResponse(response);
+            showMessage("Customer deleted successfully.");
+            fetchCustomers();
+            fetchAuditLogs();
+            fetchDashboardSummary();
+
+            if (customerDetailPanel) {
+                customerDetailPanel.innerHTML = `<p class="muted-text">Select “View” on a customer to see their stored data.</p>`;
+            }
+            if (customerTransactionsPanel) {
+                customerTransactionsPanel.innerHTML = `<div class="transaction-item"><p class="muted-text">Select “View” on a customer to load transactions.</p></div>`;
+            }
+            if (customerTimelinePanel) {
+                customerTimelinePanel.innerHTML = `<div class="transaction-item"><p class="muted-text">Select “View” on a customer to load timeline events.</p></div>`;
+            }
+
+            document.getElementById("edit-customer-id").value = "";
+            document.getElementById("edit-full-name").value = "";
+            document.getElementById("edit-email").value = "";
+        } catch (error) {
+            showMessage(error.message, true);
+        }
+    });
 }
 
 customerForm?.addEventListener("submit", async (event) => {
@@ -528,6 +571,7 @@ editCustomerForm?.addEventListener("submit", async (event) => {
         showEditMessage("Customer updated successfully.");
         fetchCustomers();
         fetchAuditLogs();
+        fetchDashboardSummary();
         viewCustomer(customerId);
     } catch (error) {
         showEditMessage(error.message, true);
@@ -658,150 +702,27 @@ logoutBtn?.addEventListener("click", async () => {
     }
 });
 
-async function viewCustomer(customerId) {
-    try {
-        const response = await fetch(`/api/customers/${customerId}`);
-        const customer = await handleJsonResponse(response);
-        renderCustomerDetail(customer);
-        fetchTransactionsForCustomer(customer.account_number);
-
-        if (window.currentUserRole === "manager") {
-            document.getElementById("edit-customer-id").value = customer.id;
-            document.getElementById("edit-full-name").value = customer.full_name;
-            document.getElementById("edit-email").value = customer.email;
-        }
-    } catch (error) {
-        showMessage(error.message, true);
-    }
-}
-
-async function startEditCustomer(customerId) {
-    try {
-        const response = await fetch(`/api/customers/${customerId}`);
-        const customer = await handleJsonResponse(response);
-
-        document.getElementById("edit-customer-id").value = customer.id;
-        document.getElementById("edit-full-name").value = customer.full_name;
-        document.getElementById("edit-email").value = customer.email;
-
-        showEditMessage(`Loaded ${customer.full_name} into edit form.`);
-        document.getElementById("edit-full-name").focus();
-    } catch (error) {
-        showEditMessage(error.message, true);
-    }
-}
-
-async function deactivateCustomer(customerId) {
-    openConfirmModal(
-        "Deactivate Customer",
-        "Deactivate this customer account?",
-        async () => {
-            try {
-                const response = await fetch(`/api/customers/${customerId}/deactivate`, {
-                    method: "PATCH"
-                });
-
-                await handleJsonResponse(response);
-                showMessage("Customer deactivated successfully.");
-                fetchCustomers();
-                fetchAuditLogs();
-                fetchDashboardSummary();
-            } catch (error) {
-                showMessage(error.message, true);
-            }
-        }
-    );
-}
-
-async function reactivateCustomer(customerId) {
-    openConfirmModal(
-        "Activate Customer",
-        "Reactivate this customer account?",
-        async () => {
-            try {
-                const response = await fetch(`/api/customers/${customerId}/reactivate`, {
-                    method: "PATCH"
-                });
-
-                await handleJsonResponse(response);
-                showMessage("Customer activated successfully.");
-                fetchCustomers();
-                fetchAuditLogs();
-                fetchDashboardSummary();
-            } catch (error) {
-                showMessage(error.message, true);
-            }
-        }
-    );
-}
-
-async function deleteCustomer(customerId) {
-    openConfirmModal(
-        "Delete Customer",
-        "Delete this customer record?",
-        async () => {
-            try {
-                const response = await fetch(`/api/customers/${customerId}`, {
-                    method: "DELETE"
-                });
-
-                await handleJsonResponse(response);
-                showMessage("Customer deleted successfully.");
-                fetchCustomers();
-                fetchAuditLogs();
-                fetchDashboardSummary();
-
-                if (customerDetailPanel) {
-                    customerDetailPanel.innerHTML = `<p class="muted-text">Select “View” on a customer to see their current stored data.</p>`;
-                }
-
-                if (customerTransactionsPanel) {
-                    customerTransactionsPanel.innerHTML = `
-                        <div class="transaction-item">
-                            <p class="muted-text">Select “View” on a customer to load transactions for that customer.</p>
-                        </div>
-                    `;
-                }
-
-                document.getElementById("edit-customer-id").value = "";
-                document.getElementById("edit-full-name").value = "";
-                document.getElementById("edit-email").value = "";
-            } catch (error) {
-                showMessage(error.message, true);
-            }
-        }
-    );
-}
-
-customerSearchInput?.addEventListener("input", () => {
-    updateLiveCustomerSuggestions();
-});
-
-customerSearchInput?.addEventListener("focus", () => {
-    updateLiveCustomerSuggestions();
-});
-
-document.addEventListener("click", (event) => {
-    const withinSearch = event.target.closest(".search-suggest-wrapper");
-    if (!withinSearch) {
-        hideCustomerSuggestions();
-    }
-});
-
-refreshBtn?.addEventListener("click", () => {
-    if (customerSearchInput) customerSearchInput.value = "";
-    hideCustomerSuggestions();
-    fetchCustomers();
-});
-
-searchCustomersBtn?.addEventListener("click", () => {
-    hideCustomerSuggestions();
-    fetchCustomers();
-});
-
+refreshBtn?.addEventListener("click", fetchCustomers);
+searchCustomersBtn?.addEventListener("click", fetchCustomers);
 refreshTransactionsBtn?.addEventListener("click", fetchTransactions);
 filterTransactionsBtn?.addEventListener("click", fetchTransactions);
 refreshAuditBtn?.addEventListener("click", fetchAuditLogs);
+
+exportCustomersBtn?.addEventListener("click", async () => {
+    try {
+        await exportFile("/api/export/customers", "customers.csv");
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+});
+
+exportTransactionsBtn?.addEventListener("click", async () => {
+    try {
+        await exportFile("/api/export/transactions", "transactions.csv");
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+});
 
 (async () => {
     if (customerList || transactionList || auditList) {
@@ -820,8 +741,8 @@ refreshAuditBtn?.addEventListener("click", fetchAuditLogs);
     }
 })();
 
-window.deactivateCustomer = deactivateCustomer;
-window.deleteCustomer = deleteCustomer;
 window.viewCustomer = viewCustomer;
 window.startEditCustomer = startEditCustomer;
+window.deactivateCustomer = deactivateCustomer;
 window.reactivateCustomer = reactivateCustomer;
+window.deleteCustomer = deleteCustomer;

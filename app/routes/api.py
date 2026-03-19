@@ -1,10 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app import crud, schemas
 from app.database import get_db
 
 router = APIRouter(tags=["SecureBank"])
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
 
 
 def require_login(request: Request):
@@ -31,10 +41,12 @@ def read_dashboard_summary(request: Request, db: Session = Depends(get_db)):
 def read_customers(
     request: Request,
     search: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    sort_by: str | None = Query(default=None),
     db: Session = Depends(get_db)
 ):
     require_login(request)
-    return crud.get_all_customers(db, search=search)
+    return crud.get_all_customers(db, search=search, status=status, sort_by=sort_by)
 
 
 @router.get("/api/customers/{customer_id}", response_model=schemas.CustomerResponse)
@@ -46,6 +58,15 @@ def read_customer_by_id(customer_id: int, request: Request, db: Session = Depend
     return customer
 
 
+@router.get("/api/customers/{customer_id}/timeline")
+def read_customer_timeline(customer_id: int, request: Request, db: Session = Depends(get_db)):
+    require_login(request)
+    customer = crud.get_customer_by_id(db, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found.")
+    return crud.get_customer_timeline(db, customer_id)
+
+
 @router.post("/api/customers", response_model=schemas.CustomerResponse)
 def create_new_customer(
     request: Request,
@@ -53,12 +74,15 @@ def create_new_customer(
     db: Session = Depends(get_db)
 ):
     user = require_login(request)
-
     existing_email = crud.get_customer_by_email(db, customer.email.strip().lower())
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already exists.")
-
-    return crud.create_customer(db, customer, actor=user["username"])
+    return crud.create_customer(
+        db,
+        customer,
+        actor=user["username"],
+        ip_address=get_client_ip(request)
+    )
 
 
 @router.put("/api/customers/{customer_id}", response_model=schemas.CustomerResponse)
@@ -69,7 +93,13 @@ def update_customer(
     db: Session = Depends(get_db)
 ):
     user = require_manager(request)
-    customer, error = crud.update_customer(db, customer_id, payload, actor=user["username"])
+    customer, error = crud.update_customer(
+        db,
+        customer_id,
+        payload,
+        actor=user["username"],
+        ip_address=get_client_ip(request)
+    )
     if error:
         raise HTTPException(status_code=400, detail=error)
     return customer
@@ -78,7 +108,12 @@ def update_customer(
 @router.patch("/api/customers/{customer_id}/deactivate", response_model=schemas.CustomerResponse)
 def deactivate_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
     user = require_manager(request)
-    customer, error = crud.deactivate_customer(db, customer_id, actor=user["username"])
+    customer, error = crud.deactivate_customer(
+        db,
+        customer_id,
+        actor=user["username"],
+        ip_address=get_client_ip(request)
+    )
     if error:
         raise HTTPException(status_code=400, detail=error)
     return customer
@@ -87,7 +122,12 @@ def deactivate_customer(customer_id: int, request: Request, db: Session = Depend
 @router.patch("/api/customers/{customer_id}/reactivate", response_model=schemas.CustomerResponse)
 def reactivate_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
     user = require_manager(request)
-    customer, error = crud.reactivate_customer(db, customer_id, actor=user["username"])
+    customer, error = crud.reactivate_customer(
+        db,
+        customer_id,
+        actor=user["username"],
+        ip_address=get_client_ip(request)
+    )
     if error:
         raise HTTPException(status_code=400, detail=error)
     return customer
@@ -96,7 +136,12 @@ def reactivate_customer(customer_id: int, request: Request, db: Session = Depend
 @router.delete("/api/customers/{customer_id}")
 def delete_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
     user = require_manager(request)
-    success, error = crud.delete_customer(db, customer_id, actor=user["username"])
+    success, error = crud.delete_customer(
+        db,
+        customer_id,
+        actor=user["username"],
+        ip_address=get_client_ip(request)
+    )
     if not success:
         raise HTTPException(status_code=404, detail=error)
     return {"message": "Customer deleted successfully."}
@@ -120,7 +165,12 @@ def read_transactions(
 @router.post("/api/transactions/deposit", response_model=schemas.TransactionResponse)
 def deposit(request: Request, payload: schemas.DepositWithdrawRequest, db: Session = Depends(get_db)):
     user = require_login(request)
-    transaction, error = crud.deposit_money(db, payload, actor=user["username"])
+    transaction, error = crud.deposit_money(
+        db,
+        payload,
+        actor=user["username"],
+        ip_address=get_client_ip(request)
+    )
     if error:
         raise HTTPException(status_code=400, detail=error)
     return transaction
@@ -129,7 +179,12 @@ def deposit(request: Request, payload: schemas.DepositWithdrawRequest, db: Sessi
 @router.post("/api/transactions/withdraw", response_model=schemas.TransactionResponse)
 def withdraw(request: Request, payload: schemas.DepositWithdrawRequest, db: Session = Depends(get_db)):
     user = require_login(request)
-    transaction, error = crud.withdraw_money(db, payload, actor=user["username"])
+    transaction, error = crud.withdraw_money(
+        db,
+        payload,
+        actor=user["username"],
+        ip_address=get_client_ip(request)
+    )
     if error:
         raise HTTPException(status_code=400, detail=error)
     return transaction
@@ -138,7 +193,12 @@ def withdraw(request: Request, payload: schemas.DepositWithdrawRequest, db: Sess
 @router.post("/api/transactions/transfer", response_model=schemas.TransactionResponse)
 def transfer(request: Request, payload: schemas.TransferRequest, db: Session = Depends(get_db)):
     user = require_login(request)
-    transaction, error = crud.transfer_money(db, payload, actor=user["username"])
+    transaction, error = crud.transfer_money(
+        db,
+        payload,
+        actor=user["username"],
+        ip_address=get_client_ip(request)
+    )
     if error:
         raise HTTPException(status_code=400, detail=error)
     return transaction
@@ -148,3 +208,25 @@ def transfer(request: Request, payload: schemas.TransferRequest, db: Session = D
 def read_audit_logs(request: Request, db: Session = Depends(get_db)):
     require_manager(request)
     return crud.get_all_audit_logs(db)
+
+
+@router.get("/api/export/customers")
+def export_customers(request: Request, db: Session = Depends(get_db)):
+    require_manager(request)
+    csv_text = crud.export_customers_csv(db)
+    return PlainTextResponse(
+        csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="customers.csv"'}
+    )
+
+
+@router.get("/api/export/transactions")
+def export_transactions(request: Request, db: Session = Depends(get_db)):
+    require_manager(request)
+    csv_text = crud.export_transactions_csv(db)
+    return PlainTextResponse(
+        csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="transactions.csv"'}
+    )
