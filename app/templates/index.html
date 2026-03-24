@@ -98,6 +98,24 @@
     </div>
 </section>
 
+<section class="dashboard-grid">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Customer Status Chart</h3>
+            <span class="panel-badge">Charts</span>
+        </div>
+        <canvas id="customerStatusChart" height="180"></canvas>
+    </div>
+
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Transaction Type Chart</h3>
+            <span class="panel-badge">Charts</span>
+        </div>
+        <canvas id="transactionTypeChart" height="180"></canvas>
+    </div>
+</section>
+
 <section id="customers-section" class="wide-panel">
     <div class="panel-card">
         <div class="panel-header">
@@ -106,7 +124,10 @@
         </div>
 
         <div class="toolbar-card">
-            <input type="text" id="customer-search" placeholder="Search by name, email, or account">
+            <div class="search-wrapper">
+                <input type="text" id="customer-search" placeholder="Search by name, email, or account">
+                <div id="customer-search-suggestions" class="suggestions-box hidden"></div>
+            </div>
             <select id="customer-status-filter">
                 <option value="">All Status</option>
                 <option value="active">Active</option>
@@ -306,11 +327,39 @@
             <span class="panel-badge">Security Monitoring</span>
         </div>
 
-        <div class="toolbar-card single-toolbar">
-            <button id="refresh-audit-btn" type="button" class="ghost-btn">Refresh</button>
+        <div class="toolbar-card">
+            <input type="text" id="audit-actor-filter" placeholder="Filter by actor">
+            <input type="text" id="audit-event-filter" placeholder="Filter by event type">
+            <select id="audit-result-filter">
+                <option value="">All Results</option>
+                <option value="success">Success</option>
+                <option value="failure">Failure</option>
+            </select>
+            <button id="refresh-audit-btn" type="button" class="ghost-btn">Apply Filter</button>
         </div>
 
         <div id="audit-list" class="table-card"></div>
     </div>
 </section>
+
+<section class="wide-panel">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Staff User Management</h3>
+            <span class="panel-badge">Manager Only</span>
+        </div>
+        <div id="staff-user-list" class="table-card">
+            <div class="transaction-item">
+                <p class="muted-text">Manager accounts can unlock locked staff users here.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div id="toast-container" class="toast-container"></div>
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}

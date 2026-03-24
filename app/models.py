@@ -16,6 +16,7 @@ class StaffUser(Base):
     failed_login_attempts = Column(Integer, nullable=False, default=0)
     is_locked = Column(Boolean, nullable=False, default=False)
     last_failed_login_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class Customer(Base):

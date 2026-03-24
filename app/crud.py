@@ -86,6 +86,31 @@ def seed_default_staff_user(db: Session):
         db.commit()
 
 
+def get_all_staff_users(db: Session):
+    return db.query(models.StaffUser).order_by(models.StaffUser.id.asc()).all()
+
+
+def unlock_staff_user(db: Session, user_id: int, actor: str, ip_address: str | None = None):
+    user = db.query(models.StaffUser).filter(models.StaffUser.id == user_id).first()
+    if not user:
+        return None, "User not found."
+
+    user.is_locked = False
+    user.failed_login_attempts = 0
+    user.last_failed_login_at = None
+    db.commit()
+    db.refresh(user)
+
+    create_audit_log(
+        db,
+        "staff_unlock",
+        actor,
+        f"Unlocked staff user {user.username}",
+        ip_address=ip_address
+    )
+    return user, None
+
+
 def generate_unique_account_number(db: Session) -> str:
     while True:
         account_number = f"SB{random.randint(10000000, 99999999)}"
@@ -129,12 +154,45 @@ def seed_demo_customers_bulk(db: Session):
 
     if len(created_customers) >= 8:
         demo_transactions = [
-            models.Transaction(transaction_type="deposit", amount=500, description="Initial demo deposit", to_customer_id=created_customers[0].id),
-            models.Transaction(transaction_type="withdraw", amount=150, description="Demo cash withdrawal", from_customer_id=created_customers[1].id),
-            models.Transaction(transaction_type="transfer", amount=200, description="Demo transfer 1", from_customer_id=created_customers[2].id, to_customer_id=created_customers[3].id),
-            models.Transaction(transaction_type="deposit", amount=1250, description="Large salary demo", to_customer_id=created_customers[4].id, risk_flag=True),
-            models.Transaction(transaction_type="transfer", amount=300, description="Demo transfer 2", from_customer_id=created_customers[5].id, to_customer_id=created_customers[6].id),
-            models.Transaction(transaction_type="withdraw", amount=100, description="ATM withdrawal demo", from_customer_id=created_customers[7].id),
+            models.Transaction(
+                transaction_type="deposit",
+                amount=500,
+                description="Initial demo deposit",
+                to_customer_id=created_customers[0].id
+            ),
+            models.Transaction(
+                transaction_type="withdraw",
+                amount=150,
+                description="Demo cash withdrawal",
+                from_customer_id=created_customers[1].id
+            ),
+            models.Transaction(
+                transaction_type="transfer",
+                amount=200,
+                description="Demo transfer 1",
+                from_customer_id=created_customers[2].id,
+                to_customer_id=created_customers[3].id
+            ),
+            models.Transaction(
+                transaction_type="deposit",
+                amount=1250,
+                description="Large salary demo",
+                to_customer_id=created_customers[4].id,
+                risk_flag=True
+            ),
+            models.Transaction(
+                transaction_type="transfer",
+                amount=300,
+                description="Demo transfer 2",
+                from_customer_id=created_customers[5].id,
+                to_customer_id=created_customers[6].id
+            ),
+            models.Transaction(
+                transaction_type="withdraw",
+                amount=100,
+                description="ATM withdrawal demo",
+                from_customer_id=created_customers[7].id
+            ),
         ]
 
         created_customers[0].balance += 500
@@ -171,11 +229,15 @@ def authenticate_staff_user(db: Session, username: str, password: str):
     if not verify_password(password, user.password):
         user.failed_login_attempts += 1
         user.last_failed_login_at = datetime.utcnow()
+
         if user.failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
             user.is_locked = True
+
         db.commit()
+
         if user.is_locked:
             return None, "Account locked after repeated failed login attempts."
+
         return None, "Invalid username or password."
 
     user.failed_login_attempts = 0
@@ -213,6 +275,34 @@ def get_dashboard_summary(db: Session):
         "total_balance": total_balance,
         "suspicious_transactions": suspicious_transactions,
         "low_balance_customers": low_balance_customers,
+    }
+
+
+def get_chart_data(db: Session):
+    customer_status = {
+        "active": db.query(func.count(models.Customer.id)).filter(
+            models.Customer.is_active.is_(True)
+        ).scalar() or 0,
+        "inactive": db.query(func.count(models.Customer.id)).filter(
+            models.Customer.is_active.is_(False)
+        ).scalar() or 0,
+    }
+
+    transaction_types = {
+        "deposit": db.query(func.count(models.Transaction.id)).filter(
+            models.Transaction.transaction_type == "deposit"
+        ).scalar() or 0,
+        "withdraw": db.query(func.count(models.Transaction.id)).filter(
+            models.Transaction.transaction_type == "withdraw"
+        ).scalar() or 0,
+        "transfer": db.query(func.count(models.Transaction.id)).filter(
+            models.Transaction.transaction_type == "transfer"
+        ).scalar() or 0,
+    }
+
+    return {
+        "customer_status": customer_status,
+        "transaction_types": transaction_types
     }
 
 
@@ -269,7 +359,12 @@ def get_customer_by_id(db: Session, customer_id: int):
     ).first()
 
 
-def create_customer(db: Session, customer: schemas.CustomerCreate, actor: str, ip_address: str | None = None):
+def create_customer(
+    db: Session,
+    customer: schemas.CustomerCreate,
+    actor: str,
+    ip_address: str | None = None
+):
     db_customer = models.Customer(
         full_name=customer.full_name.strip(),
         email=customer.email.strip().lower(),
@@ -320,13 +415,22 @@ def update_customer(
         db,
         "customer_update",
         actor,
-        f"Updated customer {customer.account_number}: name '{old_name}' to '{customer.full_name}', email '{old_email}' to '{customer.email}'",
+        (
+            f"Updated customer {customer.account_number}: "
+            f"name '{old_name}' to '{customer.full_name}', "
+            f"email '{old_email}' to '{customer.email}'"
+        ),
         ip_address=ip_address
     )
     return customer, None
 
 
-def deactivate_customer(db: Session, customer_id: int, actor: str, ip_address: str | None = None):
+def deactivate_customer(
+    db: Session,
+    customer_id: int,
+    actor: str,
+    ip_address: str | None = None
+):
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return None, "Customer not found."
@@ -349,7 +453,12 @@ def deactivate_customer(db: Session, customer_id: int, actor: str, ip_address: s
     return customer, None
 
 
-def reactivate_customer(db: Session, customer_id: int, actor: str, ip_address: str | None = None):
+def reactivate_customer(
+    db: Session,
+    customer_id: int,
+    actor: str,
+    ip_address: str | None = None
+):
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return None, "Customer not found."
@@ -372,7 +481,12 @@ def reactivate_customer(db: Session, customer_id: int, actor: str, ip_address: s
     return customer, None
 
 
-def delete_customer(db: Session, customer_id: int, actor: str, ip_address: str | None = None):
+def delete_customer(
+    db: Session,
+    customer_id: int,
+    actor: str,
+    ip_address: str | None = None
+):
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return False, "Customer not found."
@@ -419,10 +533,22 @@ def get_all_transactions(
     return transactions
 
 
-def get_all_audit_logs(db: Session):
-    return db.query(models.AuditLog).order_by(
-        models.AuditLog.id.desc()
-    ).all()
+def get_all_audit_logs(
+    db: Session,
+    actor: str | None = None,
+    event_type: str | None = None,
+    result: str | None = None
+):
+    query = db.query(models.AuditLog)
+
+    if actor:
+        query = query.filter(models.AuditLog.actor.ilike(f"%{actor.strip()}%"))
+    if event_type:
+        query = query.filter(models.AuditLog.event_type == event_type)
+    if result:
+        query = query.filter(models.AuditLog.result == result)
+
+    return query.order_by(models.AuditLog.id.desc()).all()
 
 
 def get_customer_timeline(db: Session, customer_id: int):
@@ -442,7 +568,10 @@ def get_customer_timeline(db: Session, customer_id: int):
         items.append(
             {
                 "event_type": transaction.transaction_type,
-                "description": f"{transaction.transaction_type.title()} of £{transaction.amount} ({transaction.description or 'No description'})",
+                "description": (
+                    f"{transaction.transaction_type.title()} of £{transaction.amount} "
+                    f"({transaction.description or 'No description'})"
+                ),
                 "created_at": transaction.created_at
             }
         )
@@ -590,7 +719,10 @@ def transfer_money(
     db.commit()
     db.refresh(transaction)
 
-    details = f"Transferred £{request.amount} from {from_customer.account_number} to {to_customer.account_number}"
+    details = (
+        f"Transferred £{request.amount} from "
+        f"{from_customer.account_number} to {to_customer.account_number}"
+    )
     if risk_flag:
         details += " [flagged as large transaction]"
 
@@ -608,7 +740,17 @@ def export_customers_csv(db: Session) -> str:
     customers = get_all_customers(db)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["id", "full_name", "email", "account_number", "balance", "is_active", "created_at", "updated_at"])
+    writer.writerow([
+        "id",
+        "full_name",
+        "email",
+        "account_number",
+        "balance",
+        "is_active",
+        "created_at",
+        "updated_at"
+    ])
+
     for customer in customers:
         writer.writerow([
             customer.id,
@@ -620,6 +762,7 @@ def export_customers_csv(db: Session) -> str:
             customer.created_at,
             customer.updated_at
         ])
+
     return output.getvalue()
 
 
@@ -627,7 +770,17 @@ def export_transactions_csv(db: Session) -> str:
     transactions = get_all_transactions(db)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["id", "transaction_type", "amount", "description", "risk_flag", "from_customer_id", "to_customer_id", "created_at"])
+    writer.writerow([
+        "id",
+        "transaction_type",
+        "amount",
+        "description",
+        "risk_flag",
+        "from_customer_id",
+        "to_customer_id",
+        "created_at"
+    ])
+
     for transaction in transactions:
         writer.writerow([
             transaction.id,
@@ -639,4 +792,5 @@ def export_transactions_csv(db: Session) -> str:
             transaction.to_customer_id,
             transaction.created_at
         ])
+
     return output.getvalue()

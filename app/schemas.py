@@ -26,14 +26,6 @@ class CustomerUpdate(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
 
-    @field_validator("full_name")
-    @classmethod
-    def validate_name(cls, value: str):
-        value = value.strip()
-        if len(value.split()) < 2:
-            raise ValueError("Please enter a full name.")
-        return value
-
 
 class CustomerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -100,3 +92,19 @@ class CustomerTimelineItem(BaseModel):
     event_type: str
     description: str
     created_at: datetime
+
+
+class StaffUserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    role: str
+    failed_login_attempts: int
+    is_locked: bool
+    created_at: datetime
+
+
+class ChartDataResponse(BaseModel):
+    customer_status: dict[str, int]
+    transaction_types: dict[str, int]

@@ -37,6 +37,12 @@ def read_dashboard_summary(request: Request, db: Session = Depends(get_db)):
     return crud.get_dashboard_summary(db)
 
 
+@router.get("/api/chart-data", response_model=schemas.ChartDataResponse)
+def read_chart_data(request: Request, db: Session = Depends(get_db)):
+    require_login(request)
+    return crud.get_chart_data(db)
+
+
 @router.get("/api/customers", response_model=list[schemas.CustomerResponse])
 def read_customers(
     request: Request,
@@ -58,7 +64,7 @@ def read_customer_by_id(customer_id: int, request: Request, db: Session = Depend
     return customer
 
 
-@router.get("/api/customers/{customer_id}/timeline")
+@router.get("/api/customers/{customer_id}/timeline", response_model=list[schemas.CustomerTimelineItem])
 def read_customer_timeline(customer_id: int, request: Request, db: Session = Depends(get_db)):
     require_login(request)
     customer = crud.get_customer_by_id(db, customer_id)
@@ -205,9 +211,35 @@ def transfer(request: Request, payload: schemas.TransferRequest, db: Session = D
 
 
 @router.get("/api/audit-logs", response_model=list[schemas.AuditLogResponse])
-def read_audit_logs(request: Request, db: Session = Depends(get_db)):
+def read_audit_logs(
+    request: Request,
+    actor: str | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    result: str | None = Query(default=None),
+    db: Session = Depends(get_db)
+):
     require_manager(request)
-    return crud.get_all_audit_logs(db)
+    return crud.get_all_audit_logs(db, actor=actor, event_type=event_type, result=result)
+
+
+@router.get("/api/staff-users", response_model=list[schemas.StaffUserResponse])
+def read_staff_users(request: Request, db: Session = Depends(get_db)):
+    require_manager(request)
+    return crud.get_all_staff_users(db)
+
+
+@router.patch("/api/staff-users/{user_id}/unlock", response_model=schemas.StaffUserResponse)
+def unlock_staff_user(user_id: int, request: Request, db: Session = Depends(get_db)):
+    manager = require_manager(request)
+    user, error = crud.unlock_staff_user(
+        db,
+        user_id,
+        actor=manager["username"],
+        ip_address=get_client_ip(request)
+    )
+    if error:
+        raise HTTPException(status_code=404, detail=error)
+    return user
 
 
 @router.get("/api/export/customers")

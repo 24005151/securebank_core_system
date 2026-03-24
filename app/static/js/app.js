@@ -8,6 +8,7 @@ const loginForm = document.getElementById("login-form");
 const customerList = document.getElementById("customer-list");
 const transactionList = document.getElementById("transaction-list");
 const auditList = document.getElementById("audit-list");
+const staffUserList = document.getElementById("staff-user-list");
 const customerDetailPanel = document.getElementById("customer-detail-panel");
 const customerTransactionsPanel = document.getElementById("customer-transactions-panel");
 const customerTimelinePanel = document.getElementById("customer-timeline-panel");
@@ -29,6 +30,11 @@ const exportTransactionsBtn = document.getElementById("export-transactions-btn")
 const customerSearchInput = document.getElementById("customer-search");
 const customerStatusFilter = document.getElementById("customer-status-filter");
 const customerSortFilter = document.getElementById("customer-sort-filter");
+const suggestionsBox = document.getElementById("customer-search-suggestions");
+
+const auditActorFilter = document.getElementById("audit-actor-filter");
+const auditEventFilter = document.getElementById("audit-event-filter");
+const auditResultFilter = document.getElementById("audit-result-filter");
 
 const confirmModal = document.getElementById("confirm-modal");
 const modalTitle = document.getElementById("modal-title");
@@ -36,13 +42,34 @@ const modalMessage = document.getElementById("modal-message");
 const modalConfirm = document.getElementById("modal-confirm");
 const modalCancel = document.getElementById("modal-cancel");
 
+const toastContainer = document.getElementById("toast-container");
+const loadingOverlay = document.getElementById("loading-overlay");
+
 window.currentUserRole = "staff";
 let confirmAction = null;
+let cachedCustomers = [];
+let customerChart = null;
+let transactionChart = null;
+
+function showToast(message, isError = false) {
+    if (!toastContainer) return;
+    const toast = document.createElement("div");
+    toast.className = `toast ${isError ? "toast-error" : "toast-success"}`;
+    toast.textContent = message;
+    toastContainer.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function setLoading(show) {
+    if (!loadingOverlay) return;
+    loadingOverlay.classList.toggle("hidden", !show);
+}
 
 function showMessage(message, isError = false) {
     if (!messageBox) return;
     messageBox.textContent = message;
     messageBox.style.color = isError ? "crimson" : "green";
+    showToast(message, isError);
     setTimeout(() => {
         messageBox.textContent = "";
     }, 3000);
@@ -52,6 +79,7 @@ function showEditMessage(message, isError = false) {
     if (!editMessageBox) return;
     editMessageBox.textContent = message;
     editMessageBox.style.color = isError ? "crimson" : "green";
+    showToast(message, isError);
     setTimeout(() => {
         editMessageBox.textContent = "";
     }, 3000);
@@ -61,6 +89,7 @@ function showLoginMessage(message, isError = false) {
     if (!loginMessageBox) return;
     loginMessageBox.textContent = message;
     loginMessageBox.style.color = isError ? "crimson" : "green";
+    showToast(message, isError);
 }
 
 function escapeHtml(text) {
@@ -156,6 +185,47 @@ function renderDashboardSummary(summary) {
     });
 }
 
+function renderCharts(data) {
+    if (typeof Chart === "undefined") return;
+
+    const customerCanvas = document.getElementById("customerStatusChart");
+    const transactionCanvas = document.getElementById("transactionTypeChart");
+
+    if (customerChart) customerChart.destroy();
+    if (transactionChart) transactionChart.destroy();
+
+    if (customerCanvas) {
+        customerChart = new Chart(customerCanvas, {
+            type: "doughnut",
+            data: {
+                labels: ["Active", "Inactive"],
+                datasets: [{
+                    data: [data.customer_status.active, data.customer_status.inactive]
+                }]
+            }
+        });
+    }
+
+    if (transactionCanvas) {
+        transactionChart = new Chart(transactionCanvas, {
+            type: "bar",
+            data: {
+                labels: ["Deposit", "Withdraw", "Transfer"],
+                datasets: [{
+                    data: [
+                        data.transaction_types.deposit,
+                        data.transaction_types.withdraw,
+                        data.transaction_types.transfer
+                    ]
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+}
+
 async function fetchDashboardSummary() {
     try {
         const response = await fetch("/api/dashboard-summary");
@@ -166,8 +236,64 @@ async function fetchDashboardSummary() {
     }
 }
 
+async function fetchChartData() {
+    try {
+        const response = await fetch("/api/chart-data");
+        const data = await handleJsonResponse(response);
+        renderCharts(data);
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+}
+
+function renderSuggestions(matches) {
+    if (!suggestionsBox) return;
+    if (!matches.length) {
+        suggestionsBox.innerHTML = "";
+        suggestionsBox.classList.add("hidden");
+        return;
+    }
+
+    suggestionsBox.innerHTML = matches.map((customer) => `
+        <button type="button" class="suggestion-item" data-id="${customer.id}">
+            ${escapeHtml(customer.full_name)} - ${escapeHtml(customer.account_number)}
+        </button>
+    `).join("");
+
+    suggestionsBox.classList.remove("hidden");
+
+    suggestionsBox.querySelectorAll(".suggestion-item").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const customerId = Number(button.dataset.id);
+            suggestionsBox.classList.add("hidden");
+            await viewCustomer(customerId);
+        });
+    });
+}
+
+function updateSuggestions() {
+    if (!customerSearchInput) return;
+    const query = customerSearchInput.value.trim().toLowerCase();
+    if (!query) {
+        renderSuggestions([]);
+        return;
+    }
+
+    const matches = cachedCustomers
+        .filter((customer) =>
+            customer.full_name.toLowerCase().includes(query) ||
+            customer.email.toLowerCase().includes(query) ||
+            customer.account_number.toLowerCase().includes(query)
+        )
+        .slice(0, 6);
+
+    renderSuggestions(matches);
+}
+
 function renderCustomers(customers) {
     if (!customerList) return;
+
+    cachedCustomers = customers;
 
     if (!customers.length) {
         customerList.innerHTML = `<div class="customer-item"><p class="muted-text">No customer records found.</p></div>`;
@@ -370,8 +496,15 @@ function renderAuditLogs(logs) {
 async function fetchAuditLogs() {
     if (!auditList) return;
 
+    const params = new URLSearchParams();
+    if (auditActorFilter?.value.trim()) params.append("actor", auditActorFilter.value.trim());
+    if (auditEventFilter?.value.trim()) params.append("event_type", auditEventFilter.value.trim());
+    if (auditResultFilter?.value) params.append("result", auditResultFilter.value);
+
+    const url = params.toString() ? `/api/audit-logs?${params.toString()}` : "/api/audit-logs";
+
     try {
-        const response = await fetch("/api/audit-logs");
+        const response = await fetch(url);
         const logs = await handleJsonResponse(response);
         renderAuditLogs(logs);
     } catch (error) {
@@ -381,6 +514,59 @@ async function fetchAuditLogs() {
             auditList.innerHTML = `<div class="audit-item"><p class="muted-text">Audit log is restricted to manager accounts.</p></div>`;
         }
     }
+}
+
+function renderStaffUsers(users) {
+    if (!staffUserList) return;
+
+    if (window.currentUserRole !== "manager") {
+        staffUserList.innerHTML = `<div class="transaction-item"><p class="muted-text">Manager access required.</p></div>`;
+        return;
+    }
+
+    if (!users.length) {
+        staffUserList.innerHTML = `<div class="transaction-item"><p class="muted-text">No staff users found.</p></div>`;
+        return;
+    }
+
+    staffUserList.innerHTML = users.map((user) => `
+        <div class="transaction-item">
+            <h3>${escapeHtml(user.username)}</h3>
+            <p class="transaction-meta"><strong>Role:</strong> ${escapeHtml(user.role)}</p>
+            <p class="transaction-meta"><strong>Locked:</strong> ${user.is_locked ? "Yes" : "No"}</p>
+            <p class="transaction-meta"><strong>Failed Attempts:</strong> ${user.failed_login_attempts}</p>
+            <p class="transaction-meta"><strong>Created:</strong> ${escapeHtml(formatDateTime(user.created_at))}</p>
+            ${user.is_locked ? `<button type="button" onclick="unlockStaffUser(${user.id})">Unlock Account</button>` : ""}
+        </div>
+    `).join("");
+}
+
+async function fetchStaffUsers() {
+    if (!staffUserList || window.currentUserRole !== "manager") return;
+
+    try {
+        const response = await fetch("/api/staff-users");
+        const users = await handleJsonResponse(response);
+        renderStaffUsers(users);
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+}
+
+async function unlockStaffUser(userId) {
+    openConfirmModal("Unlock User", "Unlock this staff account?", async () => {
+        try {
+            const response = await fetch(`/api/staff-users/${userId}/unlock`, {
+                method: "PATCH"
+            });
+            await handleJsonResponse(response);
+            showToast("Staff user unlocked successfully.");
+            fetchStaffUsers();
+            fetchAuditLogs();
+        } catch (error) {
+            showToast(error.message, true);
+        }
+    });
 }
 
 async function exportFile(url, filename) {
@@ -458,6 +644,7 @@ async function deactivateCustomer(customerId) {
             fetchCustomers();
             fetchAuditLogs();
             fetchDashboardSummary();
+            fetchChartData();
         } catch (error) {
             showMessage(error.message, true);
         }
@@ -475,6 +662,7 @@ async function reactivateCustomer(customerId) {
             fetchCustomers();
             fetchAuditLogs();
             fetchDashboardSummary();
+            fetchChartData();
         } catch (error) {
             showMessage(error.message, true);
         }
@@ -492,6 +680,7 @@ async function deleteCustomer(customerId) {
             fetchCustomers();
             fetchAuditLogs();
             fetchDashboardSummary();
+            fetchChartData();
 
             if (customerDetailPanel) {
                 customerDetailPanel.innerHTML = `<p class="muted-text">Select “View” on a customer to see their stored data.</p>`;
@@ -512,6 +701,14 @@ async function deleteCustomer(customerId) {
     });
 }
 
+customerSearchInput?.addEventListener("input", updateSuggestions);
+
+document.addEventListener("click", (event) => {
+    if (!event.target.closest(".search-wrapper")) {
+        suggestionsBox?.classList.add("hidden");
+    }
+});
+
 customerForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -525,6 +722,7 @@ customerForm?.addEventListener("submit", async (event) => {
     }
 
     try {
+        setLoading(true);
         const response = await fetch("/api/customers", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -538,8 +736,11 @@ customerForm?.addEventListener("submit", async (event) => {
         fetchCustomers();
         fetchAuditLogs();
         fetchDashboardSummary();
+        fetchChartData();
     } catch (error) {
         showMessage(error.message, true);
+    } finally {
+        setLoading(false);
     }
 });
 
@@ -561,6 +762,7 @@ editCustomerForm?.addEventListener("submit", async (event) => {
     }
 
     try {
+        setLoading(true);
         const response = await fetch(`/api/customers/${customerId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -572,9 +774,11 @@ editCustomerForm?.addEventListener("submit", async (event) => {
         fetchCustomers();
         fetchAuditLogs();
         fetchDashboardSummary();
-        viewCustomer(customerId);
+        await viewCustomer(customerId);
     } catch (error) {
         showEditMessage(error.message, true);
+    } finally {
+        setLoading(false);
     }
 });
 
@@ -586,6 +790,7 @@ depositForm?.addEventListener("submit", async (event) => {
     const description = document.getElementById("deposit-description").value.trim();
 
     try {
+        setLoading(true);
         const response = await fetch("/api/transactions/deposit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -599,8 +804,11 @@ depositForm?.addEventListener("submit", async (event) => {
         fetchTransactions();
         fetchAuditLogs();
         fetchDashboardSummary();
+        fetchChartData();
     } catch (error) {
         showMessage(error.message, true);
+    } finally {
+        setLoading(false);
     }
 });
 
@@ -612,6 +820,7 @@ withdrawForm?.addEventListener("submit", async (event) => {
     const description = document.getElementById("withdraw-description").value.trim();
 
     try {
+        setLoading(true);
         const response = await fetch("/api/transactions/withdraw", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -625,8 +834,11 @@ withdrawForm?.addEventListener("submit", async (event) => {
         fetchTransactions();
         fetchAuditLogs();
         fetchDashboardSummary();
+        fetchChartData();
     } catch (error) {
         showMessage(error.message, true);
+    } finally {
+        setLoading(false);
     }
 });
 
@@ -643,6 +855,7 @@ transferForm?.addEventListener("submit", async (event) => {
         `Transfer £${amount || 0} from ${from_account_number || "source"} to ${to_account_number || "destination"}?`,
         async () => {
             try {
+                setLoading(true);
                 const response = await fetch("/api/transactions/transfer", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -661,8 +874,11 @@ transferForm?.addEventListener("submit", async (event) => {
                 fetchTransactions();
                 fetchAuditLogs();
                 fetchDashboardSummary();
+                fetchChartData();
             } catch (error) {
                 showMessage(error.message, true);
+            } finally {
+                setLoading(false);
             }
         }
     );
@@ -675,6 +891,7 @@ loginForm?.addEventListener("submit", async (event) => {
     const password = document.getElementById("login-password").value;
 
     try {
+        setLoading(true);
         const response = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -689,6 +906,8 @@ loginForm?.addEventListener("submit", async (event) => {
         }, 500);
     } catch (error) {
         showLoginMessage(error.message, true);
+    } finally {
+        setLoading(false);
     }
 });
 
@@ -711,6 +930,7 @@ refreshAuditBtn?.addEventListener("click", fetchAuditLogs);
 exportCustomersBtn?.addEventListener("click", async () => {
     try {
         await exportFile("/api/export/customers", "customers.csv");
+        showToast("Customers exported successfully.");
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -719,6 +939,7 @@ exportCustomersBtn?.addEventListener("click", async () => {
 exportTransactionsBtn?.addEventListener("click", async () => {
     try {
         await exportFile("/api/export/transactions", "transactions.csv");
+        showToast("Transactions exported successfully.");
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -732,12 +953,16 @@ exportTransactionsBtn?.addEventListener("click", async () => {
     if (customerList) {
         fetchDashboardSummary();
         fetchCustomers();
+        fetchChartData();
     }
     if (transactionList) {
         fetchTransactions();
     }
     if (auditList) {
         fetchAuditLogs();
+    }
+    if (staffUserList) {
+        fetchStaffUsers();
     }
 })();
 
@@ -746,3 +971,4 @@ window.startEditCustomer = startEditCustomer;
 window.deactivateCustomer = deactivateCustomer;
 window.reactivateCustomer = reactivateCustomer;
 window.deleteCustomer = deleteCustomer;
+window.unlockStaffUser = unlockStaffUser;
