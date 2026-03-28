@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, schemas
 from app.database import get_db
+from app.security import require_manager_or_api_key, require_session_or_api_key
 
 router = APIRouter(tags=["SecureBank"])
 
@@ -17,29 +18,21 @@ def get_client_ip(request: Request) -> str:
     return "unknown"
 
 
-def require_login(request: Request):
-    user = request.session.get("user")
-    if not user:
-        raise HTTPException(status_code=401, detail="You must be logged in.")
-    return user
-
-
-def require_manager(request: Request):
-    user = require_login(request)
-    if user.get("role") != "manager":
-        raise HTTPException(status_code=403, detail="Manager access required.")
-    return user
-
-
 @router.get("/api/dashboard-summary", response_model=schemas.DashboardSummaryResponse)
-def read_dashboard_summary(request: Request, db: Session = Depends(get_db)):
-    require_login(request)
+def read_dashboard_summary(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
+):
     return crud.get_dashboard_summary(db)
 
 
 @router.get("/api/chart-data", response_model=schemas.ChartDataResponse)
-def read_chart_data(request: Request, db: Session = Depends(get_db)):
-    require_login(request)
+def read_chart_data(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
+):
     return crud.get_chart_data(db)
 
 
@@ -49,15 +42,19 @@ def read_customers(
     search: str | None = Query(default=None),
     status: str | None = Query(default=None),
     sort_by: str | None = Query(default=None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
 ):
-    require_login(request)
     return crud.get_all_customers(db, search=search, status=status, sort_by=sort_by)
 
 
 @router.get("/api/customers/{customer_id}", response_model=schemas.CustomerResponse)
-def read_customer_by_id(customer_id: int, request: Request, db: Session = Depends(get_db)):
-    require_login(request)
+def read_customer_by_id(
+    customer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
+):
     customer = crud.get_customer_by_id(db, customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found.")
@@ -65,8 +62,12 @@ def read_customer_by_id(customer_id: int, request: Request, db: Session = Depend
 
 
 @router.get("/api/customers/{customer_id}/timeline", response_model=list[schemas.CustomerTimelineItem])
-def read_customer_timeline(customer_id: int, request: Request, db: Session = Depends(get_db)):
-    require_login(request)
+def read_customer_timeline(
+    customer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
+):
     customer = crud.get_customer_by_id(db, customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found.")
@@ -77,16 +78,19 @@ def read_customer_timeline(customer_id: int, request: Request, db: Session = Dep
 def create_new_customer(
     request: Request,
     customer: schemas.CustomerCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
 ):
-    user = require_login(request)
     existing_email = crud.get_customer_by_email(db, customer.email.strip().lower())
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already exists.")
+
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     return crud.create_customer(
         db,
         customer,
-        actor=user["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
 
@@ -96,14 +100,16 @@ def update_customer(
     customer_id: int,
     request: Request,
     payload: schemas.CustomerUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
 ):
-    user = require_manager(request)
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     customer, error = crud.update_customer(
         db,
         customer_id,
         payload,
-        actor=user["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
     if error:
@@ -112,12 +118,18 @@ def update_customer(
 
 
 @router.patch("/api/customers/{customer_id}/deactivate", response_model=schemas.CustomerResponse)
-def deactivate_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
-    user = require_manager(request)
+def deactivate_customer(
+    customer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
+):
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     customer, error = crud.deactivate_customer(
         db,
         customer_id,
-        actor=user["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
     if error:
@@ -126,12 +138,18 @@ def deactivate_customer(customer_id: int, request: Request, db: Session = Depend
 
 
 @router.patch("/api/customers/{customer_id}/reactivate", response_model=schemas.CustomerResponse)
-def reactivate_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
-    user = require_manager(request)
+def reactivate_customer(
+    customer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
+):
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     customer, error = crud.reactivate_customer(
         db,
         customer_id,
-        actor=user["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
     if error:
@@ -140,12 +158,18 @@ def reactivate_customer(customer_id: int, request: Request, db: Session = Depend
 
 
 @router.delete("/api/customers/{customer_id}")
-def delete_customer(customer_id: int, request: Request, db: Session = Depends(get_db)):
-    user = require_manager(request)
+def delete_customer(
+    customer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
+):
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     success, error = crud.delete_customer(
         db,
         customer_id,
-        actor=user["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
     if not success:
@@ -158,9 +182,9 @@ def read_transactions(
     request: Request,
     account_number: str | None = Query(default=None),
     transaction_type: str | None = Query(default=None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
 ):
-    require_login(request)
     return crud.get_all_transactions(
         db,
         account_number=account_number,
@@ -169,12 +193,18 @@ def read_transactions(
 
 
 @router.post("/api/transactions/deposit", response_model=schemas.TransactionResponse)
-def deposit(request: Request, payload: schemas.DepositWithdrawRequest, db: Session = Depends(get_db)):
-    user = require_login(request)
+def deposit(
+    request: Request,
+    payload: schemas.DepositWithdrawRequest,
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
+):
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     transaction, error = crud.deposit_money(
         db,
         payload,
-        actor=user["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
     if error:
@@ -183,12 +213,18 @@ def deposit(request: Request, payload: schemas.DepositWithdrawRequest, db: Sessi
 
 
 @router.post("/api/transactions/withdraw", response_model=schemas.TransactionResponse)
-def withdraw(request: Request, payload: schemas.DepositWithdrawRequest, db: Session = Depends(get_db)):
-    user = require_login(request)
+def withdraw(
+    request: Request,
+    payload: schemas.DepositWithdrawRequest,
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
+):
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     transaction, error = crud.withdraw_money(
         db,
         payload,
-        actor=user["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
     if error:
@@ -197,12 +233,18 @@ def withdraw(request: Request, payload: schemas.DepositWithdrawRequest, db: Sess
 
 
 @router.post("/api/transactions/transfer", response_model=schemas.TransactionResponse)
-def transfer(request: Request, payload: schemas.TransferRequest, db: Session = Depends(get_db)):
-    user = require_login(request)
+def transfer(
+    request: Request,
+    payload: schemas.TransferRequest,
+    db: Session = Depends(get_db),
+    auth=Depends(require_session_or_api_key)
+):
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     transaction, error = crud.transfer_money(
         db,
         payload,
-        actor=user["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
     if error:
@@ -216,25 +258,34 @@ def read_audit_logs(
     actor: str | None = Query(default=None),
     event_type: str | None = Query(default=None),
     result: str | None = Query(default=None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
 ):
-    require_manager(request)
     return crud.get_all_audit_logs(db, actor=actor, event_type=event_type, result=result)
 
 
 @router.get("/api/staff-users", response_model=list[schemas.StaffUserResponse])
-def read_staff_users(request: Request, db: Session = Depends(get_db)):
-    require_manager(request)
+def read_staff_users(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
+):
     return crud.get_all_staff_users(db)
 
 
 @router.patch("/api/staff-users/{user_id}/unlock", response_model=schemas.StaffUserResponse)
-def unlock_staff_user(user_id: int, request: Request, db: Session = Depends(get_db)):
-    manager = require_manager(request)
+def unlock_staff_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
+):
+    actor = auth["user"]["username"] if auth["user"] else "api_key_client"
+
     user, error = crud.unlock_staff_user(
         db,
         user_id,
-        actor=manager["username"],
+        actor=actor,
         ip_address=get_client_ip(request)
     )
     if error:
@@ -243,8 +294,11 @@ def unlock_staff_user(user_id: int, request: Request, db: Session = Depends(get_
 
 
 @router.get("/api/export/customers")
-def export_customers(request: Request, db: Session = Depends(get_db)):
-    require_manager(request)
+def export_customers(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
+):
     csv_text = crud.export_customers_csv(db)
     return PlainTextResponse(
         csv_text,
@@ -254,8 +308,11 @@ def export_customers(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/api/export/transactions")
-def export_transactions(request: Request, db: Session = Depends(get_db)):
-    require_manager(request)
+def export_transactions(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
+):
     csv_text = crud.export_transactions_csv(db)
     return PlainTextResponse(
         csv_text,

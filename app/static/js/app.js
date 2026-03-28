@@ -1,3 +1,27 @@
+const API_KEY = "Devilcat1988";
+const ORIGINAL_FETCH = window.fetch.bind(window);
+
+window.fetch = (input, init = {}) => {
+    const requestUrl = typeof input === "string" ? input : input.url;
+
+    const shouldAttachApiKey =
+        requestUrl.startsWith("/api/") ||
+        requestUrl.startsWith("/api") ||
+        requestUrl.includes("/api/");
+
+    if (!shouldAttachApiKey) {
+        return ORIGINAL_FETCH(input, init);
+    }
+
+    const headers = new Headers(init.headers || {});
+    headers.set("X-API-Key", API_KEY);
+
+    return ORIGINAL_FETCH(input, {
+        ...init,
+        headers
+    });
+};
+
 const customerForm = document.getElementById("customer-form");
 const editCustomerForm = document.getElementById("edit-customer-form");
 const depositForm = document.getElementById("deposit-form");
@@ -150,7 +174,12 @@ async function handleJsonResponse(response) {
 
     if (!response.ok) {
         if (response.status === 401) {
-            window.location.href = "/login";
+            const detail = data.detail || "Request failed.";
+            if (detail !== "Invalid username or password." &&
+                detail !== "Account locked after repeated failed login attempts." &&
+                detail !== "Invalid or missing API key.") {
+                window.location.href = "/login";
+            }
         }
         throw new Error(data.detail || "Request failed.");
     }
@@ -692,9 +721,13 @@ async function deleteCustomer(customerId) {
                 customerTimelinePanel.innerHTML = `<div class="transaction-item"><p class="muted-text">Select “View” on a customer to load timeline events.</p></div>`;
             }
 
-            document.getElementById("edit-customer-id").value = "";
-            document.getElementById("edit-full-name").value = "";
-            document.getElementById("edit-email").value = "";
+            const editId = document.getElementById("edit-customer-id");
+            const editName = document.getElementById("edit-full-name");
+            const editEmail = document.getElementById("edit-email");
+
+            if (editId) editId.value = "";
+            if (editName) editName.value = "";
+            if (editEmail) editEmail.value = "";
         } catch (error) {
             showMessage(error.message, true);
         }
