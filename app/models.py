@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+
+def _now():
+    return datetime.now(timezone.utc)
 
 
 class StaffUser(Base):
@@ -15,8 +19,9 @@ class StaffUser(Base):
     role = Column(String(20), nullable=False, default="staff")
     failed_login_attempts = Column(Integer, nullable=False, default=0)
     is_locked = Column(Boolean, nullable=False, default=False)
+    must_change_password = Column(Boolean, nullable=False, default=False)
     last_failed_login_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=_now)
 
 
 class Customer(Base):
@@ -28,8 +33,8 @@ class Customer(Base):
     account_number = Column(String(20), nullable=False, unique=True, index=True)
     balance = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=_now)
+    updated_at = Column(DateTime, nullable=False, default=_now)
 
     outgoing_transactions = relationship(
         "Transaction",
@@ -55,7 +60,7 @@ class Transaction(Base):
     from_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     to_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=_now)
 
     from_customer = relationship(
         "Customer",
@@ -78,4 +83,4 @@ class AuditLog(Base):
     details = Column(String(255), nullable=False)
     result = Column(String(20), nullable=False, default="success")
     ip_address = Column(String(64), nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=_now)

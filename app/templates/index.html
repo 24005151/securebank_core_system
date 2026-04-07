@@ -11,50 +11,107 @@
             Monitor customers, process transactions, review secure activity, and manage operational records.
         </p>
     </div>
-    <div class="hero-chip">SecureBank Admin</div>
+    <div class="hero-chip">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        SecureBank Admin
+    </div>
 </section>
 
-<section class="metrics-grid">
+<section class="metrics-grid" aria-label="Dashboard statistics">
     <div class="metric-card">
-        <div class="metric-label">Total Customers</div>
-        <div class="metric-value" id="stat-total-customers">0</div>
-        <div class="metric-bar"><span id="bar-total-customers"></span></div>
+        <div class="metric-icon-wrap mi-blue" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+        </div>
+        <div class="metric-body">
+            <div class="metric-value" id="stat-total-customers">0</div>
+            <div class="metric-label">Total Customers</div>
+        </div>
     </div>
 
     <div class="metric-card">
-        <div class="metric-label">Active Customers</div>
-        <div class="metric-value" id="stat-active-customers">0</div>
-        <div class="metric-bar success-bar"><span id="bar-active-customers"></span></div>
+        <div class="metric-icon-wrap mi-green" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+        </div>
+        <div class="metric-body">
+            <div class="metric-value" id="stat-active-customers">0</div>
+            <div class="metric-label">Active Customers</div>
+        </div>
     </div>
 
     <div class="metric-card">
-        <div class="metric-label">Inactive Customers</div>
-        <div class="metric-value" id="stat-inactive-customers">0</div>
-        <div class="metric-bar warning-bar"><span id="bar-inactive-customers"></span></div>
+        <div class="metric-icon-wrap mi-orange" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+        </div>
+        <div class="metric-body">
+            <div class="metric-value" id="stat-inactive-customers">0</div>
+            <div class="metric-label">Inactive Customers</div>
+        </div>
     </div>
 
     <div class="metric-card">
-        <div class="metric-label">Suspicious Transactions</div>
-        <div class="metric-value" id="stat-suspicious-transactions">0</div>
-        <div class="metric-bar warning-bar"><span id="bar-suspicious-transactions"></span></div>
+        <div class="metric-icon-wrap mi-red" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+        </div>
+        <div class="metric-body">
+            <div class="metric-value" id="stat-suspicious-transactions">0</div>
+            <div class="metric-label">Suspicious Txns</div>
+        </div>
     </div>
 
     <div class="metric-card">
-        <div class="metric-label">Low Balance Customers</div>
-        <div class="metric-value" id="stat-low-balance-customers">0</div>
-        <div class="metric-bar warning-bar"><span id="bar-low-balance-customers"></span></div>
+        <div class="metric-icon-wrap mi-orange" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+        </div>
+        <div class="metric-body">
+            <div class="metric-value" id="stat-low-balance-customers">0</div>
+            <div class="metric-label">Low Balance</div>
+        </div>
     </div>
 
     <div class="metric-card">
-        <div class="metric-label">Total Transactions</div>
-        <div class="metric-value" id="stat-total-transactions">0</div>
-        <div class="metric-bar info-bar"><span id="bar-total-transactions"></span></div>
+        <div class="metric-icon-wrap mi-cyan" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="7 16 3 12 7 8"/><polyline points="17 8 21 12 17 16"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+            </svg>
+        </div>
+        <div class="metric-body">
+            <div class="metric-value" id="stat-total-transactions">0</div>
+            <div class="metric-label">Total Transactions</div>
+        </div>
     </div>
 
     <div class="metric-card">
-        <div class="metric-label">Total Bank Balance</div>
-        <div class="metric-value" id="stat-total-balance">£0</div>
-        <div class="metric-bar primary-bar"><span id="bar-total-balance"></span></div>
+        <div class="metric-icon-wrap mi-purple" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                <line x1="1" y1="10" x2="23" y2="10"/>
+            </svg>
+        </div>
+        <div class="metric-body">
+            <div class="metric-value" id="stat-total-balance">£0</div>
+            <div class="metric-label">Total Balance</div>
+        </div>
     </div>
 </section>
 
@@ -68,20 +125,20 @@
         <form id="customer-form">
             <div class="form-group">
                 <label for="full_name">Full Name</label>
-                <input type="text" id="full_name" maxlength="100" required>
+                <input type="text" id="full_name" maxlength="100" required autocomplete="off">
             </div>
 
             <div class="form-group">
                 <label for="email">Email Address</label>
-                <input type="email" id="email" maxlength="120" required>
+                <input type="email" id="email" maxlength="120" required autocomplete="off">
             </div>
 
             <div class="form-group">
-                <label for="balance">Opening Balance</label>
+                <label for="balance">Opening Balance (£)</label>
                 <input type="number" id="balance" min="0" value="0" required>
             </div>
 
-            <button type="submit" class="primary-btn">Create Customer</button>
+            <button type="submit" class="primary-btn full-width-btn">Create Customer</button>
         </form>
 
         <p id="message" class="status-message"></p>
@@ -89,8 +146,8 @@
 
     <div class="panel-card">
         <div class="panel-header">
-            <h3>Recent Activity Snapshot</h3>
-            <span class="panel-badge">Live View</span>
+            <h3>Recent Activity</h3>
+            <span class="panel-badge">Live</span>
         </div>
         <div id="recent-activity-panel" class="activity-list">
             <p class="muted-text">Recent audit activity will appear here.</p>
@@ -101,16 +158,16 @@
 <section class="dashboard-grid">
     <div class="panel-card">
         <div class="panel-header">
-            <h3>Customer Status Chart</h3>
-            <span class="panel-badge">Charts</span>
+            <h3>Customer Status</h3>
+            <span class="panel-badge">Chart</span>
         </div>
         <canvas id="customerStatusChart" height="180"></canvas>
     </div>
 
     <div class="panel-card">
         <div class="panel-header">
-            <h3>Transaction Type Chart</h3>
-            <span class="panel-badge">Charts</span>
+            <h3>Transaction Breakdown</h3>
+            <span class="panel-badge">Chart</span>
         </div>
         <canvas id="transactionTypeChart" height="180"></canvas>
     </div>
@@ -120,42 +177,50 @@
     <div class="panel-card">
         <div class="panel-header">
             <h3>Customer Records</h3>
-            <span class="panel-badge">Search & Manage</span>
+            <span class="panel-badge">Search &amp; Manage</span>
         </div>
 
         <div class="toolbar-card">
             <div class="search-wrapper">
-                <input type="text" id="customer-search" placeholder="Search by name, email, or account">
-                <div id="customer-search-suggestions" class="suggestions-box hidden"></div>
+                <input type="text" id="customer-search" placeholder="Search by name, email, or account…"
+                       aria-label="Search customers" autocomplete="off">
+                <div id="customer-search-suggestions" class="suggestions-box hidden"
+                     role="listbox" aria-label="Customer suggestions"></div>
             </div>
-            <select id="customer-status-filter">
+            <select id="customer-status-filter" aria-label="Filter by status">
                 <option value="">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
             </select>
-            <select id="customer-sort-filter">
+            <select id="customer-sort-filter" aria-label="Sort order">
                 <option value="">Default Sort</option>
-                <option value="balance_desc">Balance High-Low</option>
-                <option value="balance_asc">Balance Low-High</option>
-                <option value="name_asc">Name A-Z</option>
+                <option value="balance_desc">Balance High–Low</option>
+                <option value="balance_asc">Balance Low–High</option>
+                <option value="name_asc">Name A–Z</option>
             </select>
-            <button id="search-customers-btn" type="button" class="secondary-btn">Search</button>
+            <button id="search-customers-btn" type="button" class="primary-btn">Search</button>
             <button id="refresh-btn" type="button" class="ghost-btn">Refresh</button>
-            <button id="export-customers-btn" type="button" class="ghost-btn">Export Customers CSV</button>
+            <button id="export-customers-btn" type="button" class="ghost-btn">Export CSV</button>
         </div>
 
         <div id="customer-list" class="table-card"></div>
+
+        <div class="toolbar-card single-toolbar" style="margin-top:10px;">
+            <button id="customers-prev-btn" type="button" class="ghost-btn">&#8592; Prev</button>
+            <span id="customers-page-info" class="muted-text" style="padding:0 10px;">Page 1</span>
+            <button id="customers-next-btn" type="button" class="ghost-btn">Next &#8594;</button>
+        </div>
     </div>
 </section>
 
 <section class="dashboard-grid" id="customer-view-section">
     <div class="panel-card">
         <div class="panel-header">
-            <h3>Customer Detail View</h3>
+            <h3>Customer Detail</h3>
             <span class="panel-badge">View</span>
         </div>
         <div id="customer-detail-panel">
-            <p class="muted-text">Select “View” on a customer to see their stored data.</p>
+            <p class="muted-text">Select "View" on a customer to see their stored data.</p>
         </div>
     </div>
 
@@ -170,12 +235,12 @@
 
             <div class="form-group">
                 <label for="edit-full-name">Full Name</label>
-                <input type="text" id="edit-full-name" maxlength="100">
+                <input type="text" id="edit-full-name" maxlength="100" autocomplete="off">
             </div>
 
             <div class="form-group">
                 <label for="edit-email">Email Address</label>
-                <input type="email" id="edit-email" maxlength="120">
+                <input type="email" id="edit-email" maxlength="120" autocomplete="off">
             </div>
 
             <button type="submit" class="primary-btn">Save Changes</button>
@@ -192,9 +257,7 @@
             <span class="panel-badge">History</span>
         </div>
         <div id="customer-transactions-panel" class="table-card">
-            <div class="transaction-item">
-                <p class="muted-text">Select “View” on a customer to load transactions.</p>
-            </div>
+            <div class="customer-item"><p class="muted-text">Select "View" on a customer to load transactions.</p></div>
         </div>
     </div>
 </section>
@@ -206,9 +269,7 @@
             <span class="panel-badge">Timeline</span>
         </div>
         <div id="customer-timeline-panel" class="table-card">
-            <div class="transaction-item">
-                <p class="muted-text">Select “View” on a customer to load timeline events.</p>
-            </div>
+            <div class="customer-item"><p class="muted-text">Select "View" on a customer to load timeline events.</p></div>
         </div>
     </div>
 </section>
@@ -223,20 +284,17 @@
         <form id="deposit-form">
             <div class="form-group">
                 <label for="deposit-account">Account Number</label>
-                <input type="text" id="deposit-account" required>
+                <input type="text" id="deposit-account" required autocomplete="off">
             </div>
-
             <div class="form-group">
-                <label for="deposit-amount">Amount</label>
+                <label for="deposit-amount">Amount (£)</label>
                 <input type="number" id="deposit-amount" min="1" required>
             </div>
-
             <div class="form-group">
                 <label for="deposit-description">Description</label>
                 <input type="text" id="deposit-description" maxlength="255">
             </div>
-
-            <button type="submit" class="primary-btn">Deposit Funds</button>
+            <button type="submit" class="primary-btn full-width-btn">Deposit Funds</button>
         </form>
     </div>
 
@@ -249,20 +307,17 @@
         <form id="withdraw-form">
             <div class="form-group">
                 <label for="withdraw-account">Account Number</label>
-                <input type="text" id="withdraw-account" required>
+                <input type="text" id="withdraw-account" required autocomplete="off">
             </div>
-
             <div class="form-group">
-                <label for="withdraw-amount">Amount</label>
+                <label for="withdraw-amount">Amount (£)</label>
                 <input type="number" id="withdraw-amount" min="1" required>
             </div>
-
             <div class="form-group">
                 <label for="withdraw-description">Description</label>
                 <input type="text" id="withdraw-description" maxlength="255">
             </div>
-
-            <button type="submit" class="secondary-btn">Withdraw Funds</button>
+            <button type="submit" class="secondary-btn full-width-btn">Withdraw Funds</button>
         </form>
     </div>
 
@@ -275,67 +330,69 @@
         <form id="transfer-form">
             <div class="form-group">
                 <label for="from_account_number">From Account</label>
-                <input type="text" id="from_account_number" required>
+                <input type="text" id="from_account_number" required autocomplete="off">
             </div>
-
             <div class="form-group">
                 <label for="to_account_number">To Account</label>
-                <input type="text" id="to_account_number" required>
+                <input type="text" id="to_account_number" required autocomplete="off">
             </div>
-
             <div class="form-group">
-                <label for="transfer_amount">Amount</label>
+                <label for="transfer_amount">Amount (£)</label>
                 <input type="number" id="transfer_amount" min="1" required>
             </div>
-
             <div class="form-group">
                 <label for="transfer_description">Description</label>
                 <input type="text" id="transfer_description" maxlength="255">
             </div>
-
-            <button type="submit" class="primary-btn">Transfer Funds</button>
+            <button type="submit" class="primary-btn full-width-btn">Transfer Funds</button>
         </form>
     </div>
 </section>
 
-<section id="transactions-section" class="dashboard-grid">
+<section class="dashboard-grid" id="transactions-section">
     <div class="panel-card">
         <div class="panel-header">
             <h3>Transaction History</h3>
-            <span class="panel-badge">Activity Feed</span>
+            <span class="panel-badge">Activity</span>
         </div>
 
         <div class="toolbar-card">
-            <input type="text" id="transaction-account-filter" placeholder="Filter by account number">
-            <select id="transaction-type-filter">
+            <input type="text" id="transaction-account-filter" placeholder="Filter by account number" aria-label="Filter transactions by account">
+            <select id="transaction-type-filter" aria-label="Filter by transaction type">
                 <option value="">All Types</option>
                 <option value="deposit">Deposit</option>
                 <option value="withdraw">Withdraw</option>
                 <option value="transfer">Transfer</option>
             </select>
-            <button id="filter-transactions-btn" type="button" class="secondary-btn">Filter</button>
+            <button id="filter-transactions-btn" type="button" class="primary-btn">Filter</button>
             <button id="refresh-transactions-btn" type="button" class="ghost-btn">Refresh</button>
-            <button id="export-transactions-btn" type="button" class="ghost-btn">Export Transactions CSV</button>
+            <button id="export-transactions-btn" type="button" class="ghost-btn">Export CSV</button>
         </div>
 
         <div id="transaction-list" class="table-card"></div>
+
+        <div class="toolbar-card single-toolbar" style="margin-top:10px;">
+            <button id="transactions-prev-btn" type="button" class="ghost-btn">&#8592; Prev</button>
+            <span id="transactions-page-info" class="muted-text" style="padding:0 10px;">Page 1</span>
+            <button id="transactions-next-btn" type="button" class="ghost-btn">Next &#8594;</button>
+        </div>
     </div>
 
     <div id="audit-section" class="panel-card">
         <div class="panel-header">
             <h3>Audit Log</h3>
-            <span class="panel-badge">Security Monitoring</span>
+            <span class="panel-badge">Security</span>
         </div>
 
         <div class="toolbar-card">
-            <input type="text" id="audit-actor-filter" placeholder="Filter by actor">
-            <input type="text" id="audit-event-filter" placeholder="Filter by event type">
-            <select id="audit-result-filter">
+            <input type="text" id="audit-actor-filter" placeholder="Filter by actor" aria-label="Filter audit log by actor">
+            <input type="text" id="audit-event-filter" placeholder="Filter by event type" aria-label="Filter by event type">
+            <select id="audit-result-filter" aria-label="Filter by result">
                 <option value="">All Results</option>
                 <option value="success">Success</option>
                 <option value="failure">Failure</option>
             </select>
-            <button id="refresh-audit-btn" type="button" class="ghost-btn">Apply Filter</button>
+            <button id="refresh-audit-btn" type="button" class="primary-btn">Apply</button>
         </div>
 
         <div id="audit-list" class="table-card"></div>
@@ -345,18 +402,70 @@
 <section class="wide-panel">
     <div class="panel-card">
         <div class="panel-header">
-            <h3>Staff User Management</h3>
+            <h3>Staff Users</h3>
             <span class="panel-badge">Manager Only</span>
         </div>
         <div id="staff-user-list" class="table-card">
-            <div class="transaction-item">
-                <p class="muted-text">Manager accounts can unlock locked staff users here.</p>
-            </div>
+            <div class="customer-item"><p class="muted-text">Manager accounts can view and unlock staff users here.</p></div>
         </div>
     </div>
 </section>
 
-<div id="toast-container" class="toast-container"></div>
+<section class="dashboard-grid">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Create Staff User</h3>
+            <span class="panel-badge">Manager Only</span>
+        </div>
+        <form id="create-staff-form">
+            <div class="form-group">
+                <label for="new-staff-username">Username</label>
+                <input type="text" id="new-staff-username" maxlength="50" required autocomplete="off">
+                <span class="field-help">Letters, numbers, underscores only</span>
+            </div>
+            <div class="form-group">
+                <label for="new-staff-password">Password</label>
+                <input type="password" id="new-staff-password" maxlength="100" required autocomplete="new-password">
+                <span class="field-help">Min 8 chars, uppercase, lowercase, number</span>
+            </div>
+            <div class="form-group">
+                <label for="new-staff-role">Role</label>
+                <select id="new-staff-role">
+                    <option value="staff">Staff</option>
+                    <option value="manager">Manager</option>
+                </select>
+            </div>
+            <button type="submit" class="primary-btn full-width-btn">Create Staff User</button>
+        </form>
+        <p id="create-staff-message" class="status-message"></p>
+    </div>
+
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Change Password</h3>
+            <span class="panel-badge">All Staff</span>
+        </div>
+        <form id="change-password-form">
+            <input type="hidden" id="change-password-user-id">
+            <div class="form-group">
+                <label for="change-password-current">Current Password</label>
+                <input type="password" id="change-password-current" maxlength="100" required autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label for="change-password-new">New Password</label>
+                <input type="password" id="change-password-new" maxlength="100" required autocomplete="new-password">
+                <span class="field-help">Min 8 chars, uppercase, lowercase, number</span>
+            </div>
+            <div class="form-group">
+                <label for="change-password-confirm">Confirm New Password</label>
+                <input type="password" id="change-password-confirm" maxlength="100" required autocomplete="new-password">
+            </div>
+            <button type="submit" class="primary-btn full-width-btn">Change Password</button>
+        </form>
+        <p id="change-password-message" class="status-message"></p>
+    </div>
+</section>
+
 <div id="loading-overlay" class="loading-overlay hidden">
     <div class="loading-spinner"></div>
 </div>

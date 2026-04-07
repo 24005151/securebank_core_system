@@ -7,3 +7,5 @@ pydantic
 email-validator
 itsdangerous
 passlib
+python-dotenv
+slowapi

@@ -102,9 +102,28 @@ class StaffUserResponse(BaseModel):
     role: str
     failed_login_attempts: int
     is_locked: bool
+    must_change_password: bool
     created_at: datetime
 
 
 class ChartDataResponse(BaseModel):
     customer_status: dict[str, int]
     transaction_types: dict[str, int]
+
+
+class StaffUserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
+    password: str = Field(..., min_length=8, max_length=100)
+    role: str = Field(default="staff")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str):
+        if value not in ("staff", "manager", "superadmin"):
+            raise ValueError("Role must be 'staff', 'manager', or 'superadmin'.")
+        return value
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=100)
+    new_password: str = Field(..., min_length=8, max_length=100)

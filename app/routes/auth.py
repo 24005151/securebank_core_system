@@ -3,20 +3,15 @@ from sqlalchemy.orm import Session
 
 from app import crud, schemas
 from app.database import get_db
+from app.limiter import limiter
+from app.security import generate_csrf_token
+from app.utils import get_client_ip
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
-def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return "unknown"
-
-
 @router.post("/login")
+@limiter.limit("10/minute")
 def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends(get_db)):
     ip_address = get_client_ip(request)
     user, error = crud.authenticate_staff_user(db, payload.username, payload.password)
@@ -33,9 +28,13 @@ def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends
         raise HTTPException(status_code=401, detail=error or "Invalid username or password.")
 
     request.session["user"] = {
+        "id": user.id,
         "username": user.username,
-        "role": user.role
+        "role": user.role,
+        "must_change_password": user.must_change_password
     }
+    # Issue a fresh CSRF token on login
+    generate_csrf_token(request)
 
     crud.create_audit_log(
         db,
@@ -49,7 +48,8 @@ def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends
     return {
         "message": "Login successful.",
         "username": user.username,
-        "role": user.role
+        "role": user.role,
+        "must_change_password": user.must_change_password
     }
 
 
@@ -65,3 +65,9 @@ def current_user(request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated.")
     return user
+
+
+@router.get("/csrf-token")
+def get_csrf_token(request: Request):
+    """Return the CSRF token for the current session. Call this once on page load."""
+    return {"csrf_token": generate_csrf_token(request)}

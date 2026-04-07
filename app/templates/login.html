@@ -2,57 +2,75 @@
 
 {% block title %}Staff Login - SecureBank Core System{% endblock %}
 {% block page_title %}Staff Login{% endblock %}
+{% block body_class %}login-page{% endblock %}
 
 {% block content %}
-<section class="dashboard-grid">
+<div class="login-brand">
+    <div class="login-brand-mark">SB</div>
+    <h1>SecureBank</h1>
+    <p>Secure staff access portal</p>
+</div>
+
+<div class="dashboard-grid">
     <div class="panel-card">
         <div class="panel-header">
-            <h3>Secure Staff Access</h3>
-            <span class="panel-badge">Authentication</span>
+            <h3>Sign in to your account</h3>
+            <span class="panel-badge">Staff Only</span>
         </div>
 
-        <form id="login-form">
+        <form id="login-form" aria-label="Staff login form">
             <div class="form-group">
                 <label for="login-username">Username</label>
-                <input type="text" id="login-username" required>
+                <input type="text" id="login-username" required
+                       autocomplete="username"
+                       aria-required="true"
+                       aria-describedby="login-message">
             </div>
 
             <div class="form-group">
                 <label for="login-password">Password</label>
-                <input type="password" id="login-password" required>
+                <input type="password" id="login-password" required
+                       autocomplete="current-password"
+                       aria-required="true">
             </div>
 
-            <button type="submit" class="primary-btn">Login</button>
+            <button type="submit" class="primary-btn full-width-btn">Sign in</button>
         </form>
 
-        <p id="login-message" class="status-message"></p>
+        <p id="login-message" class="status-message" role="alert" aria-live="assertive"></p>
     </div>
 
-    <div class="panel-card">
-        <div class="panel-header">
-            <h3>Demo Accounts</h3>
-            <span class="panel-badge">Role Access</span>
-        </div>
+    <div class="login-info-card">
+        <div class="panel-card">
+            <div class="panel-header">
+                <h3>Access Information</h3>
+                <span class="panel-badge">Role Access</span>
+            </div>
 
-        <div class="activity-item">
-            <div class="activity-title">Manager</div>
-            <div class="muted-text">Username: admin</div>
-            <div class="muted-text">Password: admin123</div>
-        </div>
-
-        <div class="activity-item">
-            <div class="activity-title">Staff</div>
-            <div class="muted-text">Username: staff1</div>
-            <div class="muted-text">Password: staff123</div>
-        </div>
-
-        <div class="activity-item">
-            <div class="activity-title">Privacy Notice</div>
-            <div class="muted-text">
-                This prototype stores limited customer data for assignment purposes only.
-                Access is restricted by authenticated staff role.
+            <div class="activity-list">
+                <div class="activity-item">
+                    <div class="activity-dot" style="background:#3b82f6"></div>
+                    <div class="activity-body">
+                        <div class="activity-title">Manager</div>
+                        <div class="activity-sub">Full access: customers, transactions, audit logs, staff management</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-dot" style="background:#7c3aed"></div>
+                    <div class="activity-body">
+                        <div class="activity-title">Staff</div>
+                        <div class="activity-sub">View and process transactions; read-only audit access</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-dot" style="background:#64748b"></div>
+                    <div class="activity-body">
+                        <div class="activity-title">Privacy Notice</div>
+                        <div class="activity-sub">This system stores limited customer data for assignment purposes. Access is role-restricted and fully audited.</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-</section>
+</div>
 {% endblock %}

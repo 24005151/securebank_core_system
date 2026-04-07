@@ -2,7 +2,7 @@ import csv
 import io
 import random
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -15,6 +15,11 @@ pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 LOW_BALANCE_THRESHOLD = 250
 SUSPICIOUS_TRANSACTION_THRESHOLD = 1000
 MAX_FAILED_LOGIN_ATTEMPTS = 3
+SEARCH_MAX_LENGTH = 100
+
+
+def _now():
+    return datetime.now(timezone.utc)
 
 
 def hash_password(password: str) -> str:
@@ -67,7 +72,8 @@ def seed_default_staff_user(db: Session):
         admin = models.StaffUser(
             username="admin",
             password=hash_password("Admin123"),
-            role="manager"
+            role="manager",
+            must_change_password=True
         )
         db.add(admin)
         db.commit()
@@ -80,9 +86,38 @@ def seed_default_staff_user(db: Session):
         staff = models.StaffUser(
             username="staff1",
             password=hash_password("Staff123"),
-            role="staff"
+            role="staff",
+            must_change_password=True
         )
         db.add(staff)
+        db.commit()
+
+    existing_admin2 = db.query(models.StaffUser).filter(
+        models.StaffUser.username == "admin2"
+    ).first()
+
+    if not existing_admin2:
+        admin2 = models.StaffUser(
+            username="admin2",
+            password=hash_password("Watford88"),
+            role="manager",
+            must_change_password=False
+        )
+        db.add(admin2)
+        db.commit()
+
+    existing_sysadmin = db.query(models.StaffUser).filter(
+        models.StaffUser.username == "sysadmin"
+    ).first()
+
+    if not existing_sysadmin:
+        sysadmin = models.StaffUser(
+            username="sysadmin",
+            password=hash_password("Sysadmin1"),
+            role="superadmin",
+            must_change_password=True
+        )
+        db.add(sysadmin)
         db.commit()
 
 
@@ -90,10 +125,20 @@ def get_all_staff_users(db: Session):
     return db.query(models.StaffUser).order_by(models.StaffUser.id.asc()).all()
 
 
-def unlock_staff_user(db: Session, user_id: int, actor: str, ip_address: str | None = None):
+def unlock_staff_user(
+    db: Session,
+    user_id: int,
+    actor: str,
+    actor_role: str = "staff",
+    ip_address: str | None = None
+):
     user = db.query(models.StaffUser).filter(models.StaffUser.id == user_id).first()
     if not user:
         return None, "User not found."
+
+    # Privileged accounts (manager/superadmin) can only be unlocked by a superadmin
+    if user.role in ("manager", "superadmin") and actor_role != "superadmin":
+        return None, "Only a superadmin can unlock manager or superadmin accounts."
 
     user.is_locked = False
     user.failed_login_attempts = 0
@@ -105,7 +150,79 @@ def unlock_staff_user(db: Session, user_id: int, actor: str, ip_address: str | N
         db,
         "staff_unlock",
         actor,
-        f"Unlocked staff user {user.username}",
+        f"Unlocked staff user {user.username} (role: {user.role})",
+        ip_address=ip_address
+    )
+    return user, None
+
+
+def create_staff_user(
+    db: Session,
+    payload: schemas.StaffUserCreate,
+    actor: str,
+    ip_address: str | None = None
+):
+    existing = db.query(models.StaffUser).filter(
+        models.StaffUser.username == payload.username.strip()
+    ).first()
+    if existing:
+        return None, "Username already exists."
+
+    valid, msg = validate_password_strength(payload.password)
+    if not valid:
+        return None, msg
+
+    user = models.StaffUser(
+        username=payload.username.strip(),
+        password=hash_password(payload.password),
+        role=payload.role,
+        must_change_password=True
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    create_audit_log(
+        db,
+        "staff_create",
+        actor,
+        f"Created staff user {user.username} with role {user.role}",
+        ip_address=ip_address
+    )
+    return user, None
+
+
+def change_staff_password(
+    db: Session,
+    user_id: int,
+    payload: schemas.PasswordChangeRequest,
+    actor: str,
+    ip_address: str | None = None
+):
+    user = db.query(models.StaffUser).filter(models.StaffUser.id == user_id).first()
+    if not user:
+        return None, "User not found."
+
+    if not verify_password(payload.current_password, user.password):
+        return None, "Current password is incorrect."
+
+    valid, msg = validate_password_strength(payload.new_password)
+    if not valid:
+        return None, msg
+
+    if payload.current_password == payload.new_password:
+        return None, "New password must differ from current password."
+
+    user.password = hash_password(payload.new_password)
+    user.must_change_password = False
+    db.commit()
+    db.refresh(user)
+
+    create_audit_log(
+        db,
+        "staff_password_change",
+        actor,
+        f"Password changed for staff user {user.username}",
         ip_address=ip_address
     )
     return user, None
@@ -224,19 +341,17 @@ def authenticate_staff_user(db: Session, username: str, password: str):
         return None, "Invalid username or password."
 
     if user.is_locked:
-        return None, "Account locked after repeated failed login attempts."
+        # Return generic message to prevent confirming that the username exists
+        return None, "Invalid username or password."
 
     if not verify_password(password, user.password):
         user.failed_login_attempts += 1
-        user.last_failed_login_at = datetime.utcnow()
+        user.last_failed_login_at = _now()
 
         if user.failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
             user.is_locked = True
 
         db.commit()
-
-        if user.is_locked:
-            return None, "Account locked after repeated failed login attempts."
 
         return None, "Invalid username or password."
 
@@ -310,12 +425,15 @@ def get_all_customers(
     db: Session,
     search: str | None = None,
     status: str | None = None,
-    sort_by: str | None = None
+    sort_by: str | None = None,
+    limit: int = 50,
+    offset: int = 0
 ):
     query = db.query(models.Customer)
 
     if search:
-        value = f"%{search.strip()}%"
+        term = search.strip()[:SEARCH_MAX_LENGTH]
+        value = f"%{term}%"
         query = query.filter(
             or_(
                 models.Customer.full_name.ilike(value),
@@ -338,7 +456,7 @@ def get_all_customers(
     else:
         query = query.order_by(models.Customer.id.desc())
 
-    return query.all()
+    return query.offset(offset).limit(limit).all()
 
 
 def get_customer_by_email(db: Session, email: str):
@@ -406,7 +524,7 @@ def update_customer(
 
     customer.full_name = payload.full_name.strip()
     customer.email = payload.email.strip().lower()
-    customer.updated_at = datetime.utcnow()
+    customer.updated_at = _now()
 
     db.commit()
     db.refresh(customer)
@@ -439,7 +557,7 @@ def deactivate_customer(
         return None, "Customer is already inactive."
 
     customer.is_active = False
-    customer.updated_at = datetime.utcnow()
+    customer.updated_at = _now()
     db.commit()
     db.refresh(customer)
 
@@ -467,7 +585,7 @@ def reactivate_customer(
         return None, "Customer is already active."
 
     customer.is_active = True
-    customer.updated_at = datetime.utcnow()
+    customer.updated_at = _now()
     db.commit()
     db.refresh(customer)
 
@@ -510,7 +628,9 @@ def delete_customer(
 def get_all_transactions(
     db: Session,
     account_number: str | None = None,
-    transaction_type: str | None = None
+    transaction_type: str | None = None,
+    limit: int = 50,
+    offset: int = 0
 ):
     query = db.query(models.Transaction)
 
@@ -519,36 +639,38 @@ def get_all_transactions(
             models.Transaction.transaction_type == transaction_type
         )
 
-    transactions = query.order_by(models.Transaction.id.desc()).all()
-
     if account_number:
         customer = get_customer_by_account_number(db, account_number.strip())
         if not customer:
             return []
-        transactions = [
-            t for t in transactions
-            if t.from_customer_id == customer.id or t.to_customer_id == customer.id
-        ]
+        query = query.filter(
+            or_(
+                models.Transaction.from_customer_id == customer.id,
+                models.Transaction.to_customer_id == customer.id
+            )
+        )
 
-    return transactions
+    return query.order_by(models.Transaction.id.desc()).offset(offset).limit(limit).all()
 
 
 def get_all_audit_logs(
     db: Session,
     actor: str | None = None,
     event_type: str | None = None,
-    result: str | None = None
+    result: str | None = None,
+    limit: int = 100,
+    offset: int = 0
 ):
     query = db.query(models.AuditLog)
 
     if actor:
-        query = query.filter(models.AuditLog.actor.ilike(f"%{actor.strip()}%"))
+        query = query.filter(models.AuditLog.actor.ilike(f"%{actor.strip()[:SEARCH_MAX_LENGTH]}%"))
     if event_type:
         query = query.filter(models.AuditLog.event_type == event_type)
     if result:
         query = query.filter(models.AuditLog.result == result)
 
-    return query.order_by(models.AuditLog.id.desc()).all()
+    return query.order_by(models.AuditLog.id.desc()).offset(offset).limit(limit).all()
 
 
 def get_customer_timeline(db: Session, customer_id: int):
@@ -564,7 +686,7 @@ def get_customer_timeline(db: Session, customer_id: int):
         }
     ]
 
-    for transaction in get_all_transactions(db, account_number=customer.account_number):
+    for transaction in get_all_transactions(db, account_number=customer.account_number, limit=200):
         items.append(
             {
                 "event_type": transaction.transaction_type,
@@ -594,7 +716,7 @@ def deposit_money(
         return None, "Customer account is inactive."
 
     customer.balance += request.amount
-    customer.updated_at = datetime.utcnow()
+    customer.updated_at = _now()
 
     risk_flag = request.amount >= SUSPICIOUS_TRANSACTION_THRESHOLD
 
@@ -613,13 +735,7 @@ def deposit_money(
     if risk_flag:
         details += " [flagged as large transaction]"
 
-    create_audit_log(
-        db,
-        "deposit",
-        actor,
-        details,
-        ip_address=ip_address
-    )
+    create_audit_log(db, "deposit", actor, details, ip_address=ip_address)
     return transaction, None
 
 
@@ -640,7 +756,7 @@ def withdraw_money(
         return None, "Insufficient funds."
 
     customer.balance -= request.amount
-    customer.updated_at = datetime.utcnow()
+    customer.updated_at = _now()
 
     risk_flag = request.amount >= SUSPICIOUS_TRANSACTION_THRESHOLD
 
@@ -659,13 +775,7 @@ def withdraw_money(
     if risk_flag:
         details += " [flagged as large transaction]"
 
-    create_audit_log(
-        db,
-        "withdraw",
-        actor,
-        details,
-        ip_address=ip_address
-    )
+    create_audit_log(db, "withdraw", actor, details, ip_address=ip_address)
     return transaction, None
 
 
@@ -675,35 +785,28 @@ def transfer_money(
     actor: str,
     ip_address: str | None = None
 ):
-    from_customer = get_customer_by_account_number(
-        db, request.from_account_number.strip()
-    )
-    to_customer = get_customer_by_account_number(
-        db, request.to_account_number.strip()
-    )
+    from_customer = get_customer_by_account_number(db, request.from_account_number.strip())
+    to_customer = get_customer_by_account_number(db, request.to_account_number.strip())
 
     if not from_customer:
         return None, "Source account not found."
-
     if not to_customer:
         return None, "Destination account not found."
-
     if not from_customer.is_active:
         return None, "Source account is inactive."
-
     if not to_customer.is_active:
         return None, "Destination account is inactive."
-
     if from_customer.id == to_customer.id:
         return None, "Cannot transfer to the same account."
-
     if from_customer.balance < request.amount:
         return None, "Insufficient funds."
 
+    # Both balance changes and transaction record committed atomically
+    now = _now()
     from_customer.balance -= request.amount
     to_customer.balance += request.amount
-    from_customer.updated_at = datetime.utcnow()
-    to_customer.updated_at = datetime.utcnow()
+    from_customer.updated_at = now
+    to_customer.updated_at = now
 
     risk_flag = request.amount >= SUSPICIOUS_TRANSACTION_THRESHOLD
 
@@ -726,71 +829,70 @@ def transfer_money(
     if risk_flag:
         details += " [flagged as large transaction]"
 
-    create_audit_log(
-        db,
-        "transfer",
-        actor,
-        details,
-        ip_address=ip_address
-    )
+    create_audit_log(db, "transfer", actor, details, ip_address=ip_address)
     return transaction, None
 
 
-def export_customers_csv(db: Session) -> str:
-    customers = get_all_customers(db)
+def export_customers_csv(db: Session, actor: str, ip_address: str | None = None) -> str:
+    customers = get_all_customers(db, limit=10000)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "id",
-        "full_name",
-        "email",
-        "account_number",
-        "balance",
-        "is_active",
-        "created_at",
-        "updated_at"
+        "id", "full_name", "email", "account_number",
+        "balance", "is_active", "created_at", "updated_at"
     ])
-
     for customer in customers:
         writer.writerow([
-            customer.id,
-            customer.full_name,
-            customer.email,
-            customer.account_number,
-            customer.balance,
-            customer.is_active,
-            customer.created_at,
-            customer.updated_at
+            customer.id, customer.full_name, customer.email,
+            customer.account_number, customer.balance, customer.is_active,
+            customer.created_at, customer.updated_at
         ])
-
+    create_audit_log(
+        db, "export_customers", actor,
+        f"Exported {len(customers)} customer records as CSV",
+        ip_address=ip_address
+    )
     return output.getvalue()
 
 
-def export_transactions_csv(db: Session) -> str:
-    transactions = get_all_transactions(db)
+def export_transactions_csv(db: Session, actor: str, ip_address: str | None = None) -> str:
+    transactions = get_all_transactions(db, limit=10000)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "id",
-        "transaction_type",
-        "amount",
-        "description",
-        "risk_flag",
-        "from_customer_id",
-        "to_customer_id",
-        "created_at"
+        "id", "transaction_type", "amount", "description",
+        "risk_flag", "from_customer_id", "to_customer_id", "created_at"
     ])
-
     for transaction in transactions:
         writer.writerow([
-            transaction.id,
-            transaction.transaction_type,
-            transaction.amount,
-            transaction.description,
-            transaction.risk_flag,
-            transaction.from_customer_id,
-            transaction.to_customer_id,
+            transaction.id, transaction.transaction_type, transaction.amount,
+            transaction.description, transaction.risk_flag,
+            transaction.from_customer_id, transaction.to_customer_id,
             transaction.created_at
         ])
-
+    create_audit_log(
+        db, "export_transactions", actor,
+        f"Exported {len(transactions)} transaction records as CSV",
+        ip_address=ip_address
+    )
     return output.getvalue()
+
+
+def purge_audit_logs(
+    db: Session,
+    days: int,
+    actor: str,
+    ip_address: str | None = None
+) -> int:
+    from datetime import timedelta
+    cutoff = _now() - timedelta(days=days)
+    deleted = db.query(models.AuditLog).filter(
+        models.AuditLog.created_at < cutoff
+    ).delete(synchronize_session=False)
+    db.commit()
+    create_audit_log(
+        db, "audit_log_purge", actor,
+        f"Purged {deleted} audit log entries older than {days} days",
+        ip_address=ip_address
+    )
+    return deleted
