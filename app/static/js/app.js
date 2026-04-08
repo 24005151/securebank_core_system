@@ -1,9 +1,48 @@
+/**
+ * SecureBank — main frontend logic (app.js)
+ *
+ * I handle all client-side behaviour for the dashboard:
+ *   - CSRF token injection on every mutating fetch request.
+ *   - DOM references and module-level state.
+ *   - UI helpers (toast, loading overlay, confirm modal).
+ *   - Dashboard stats and chart rendering.
+ *   - Customer list with search, sorting, and pagination.
+ *   - Customer detail panel with rich stats and quick actions.
+ *   - Transaction list with pagination.
+ *   - Audit log list.
+ *   - Staff user list with unlock and create.
+ *   - All form submission handlers.
+ *   - Event delegation for all button actions (required by
+ *     the Content-Security-Policy that blocks inline onclick).
+ *   - Customer detail panel live search.
+ *
+ * I use event delegation on list containers instead of adding
+ * onclick attributes to individual elements.  This complies
+ * with the strict CSP (script-src 'self') applied by the
+ * SecurityHeadersMiddleware in main.py.
+ */
+
 // ---------------------------------------------------------------------------
-// CSRF: fetch the session token once, then inject it on all mutating requests
+// CSRF: intercept all mutating fetch calls and inject the token
 // ---------------------------------------------------------------------------
+
+/**
+ * I keep a reference to the real window.fetch so I can call it
+ * from inside my wrapper without infinite recursion.
+ */
 const ORIGINAL_FETCH = window.fetch.bind(window);
+
+/** Module-level CSRF token — populated by fetchCsrfToken(). */
 let csrfToken = null;
 
+/**
+ * I replace window.fetch with a wrapper that automatically adds
+ * the X-CSRF-Token header on every POST, PUT, PATCH, and DELETE
+ * request once the token has been fetched.
+ *
+ * GET requests are left unchanged because they do not need CSRF
+ * protection (they have no side effects).
+ */
 window.fetch = (input, init = {}) => {
     const method = (init.method || "GET").toUpperCase();
     if (csrfToken && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
@@ -14,6 +53,15 @@ window.fetch = (input, init = {}) => {
     return ORIGINAL_FETCH(input, init);
 };
 
+/**
+ * Fetch the CSRF token from the server and store it in csrfToken.
+ *
+ * I call this once on page load (inside the init IIFE below).
+ * I use ORIGINAL_FETCH so this request itself is not subject to
+ * the CSRF-injection wrapper (it is a GET and needs no token).
+ * Errors are silently swallowed — on the login page there is
+ * no active session so the endpoint returns 401, which is fine.
+ */
 async function fetchCsrfToken() {
     try {
         const response = await ORIGINAL_FETCH("/api/auth/csrf-token");
@@ -27,88 +75,139 @@ async function fetchCsrfToken() {
 // ---------------------------------------------------------------------------
 // DOM refs
 // ---------------------------------------------------------------------------
-const customerForm = document.getElementById("customer-form");
-const editCustomerForm = document.getElementById("edit-customer-form");
-const depositForm = document.getElementById("deposit-form");
-const withdrawForm = document.getElementById("withdraw-form");
-const transferForm = document.getElementById("transfer-form");
-const loginForm = document.getElementById("login-form");
-const createStaffForm = document.getElementById("create-staff-form");
-const changePasswordForm = document.getElementById("change-password-form");
 
-const customerList = document.getElementById("customer-list");
-const transactionList = document.getElementById("transaction-list");
-const auditList = document.getElementById("audit-list");
-const staffUserList = document.getElementById("staff-user-list");
-const customerDetailPanel = document.getElementById("customer-detail-panel");
+/* --- Forms --- */
+const customerForm         = document.getElementById("customer-form");
+const editCustomerForm     = document.getElementById("edit-customer-form");
+const depositForm          = document.getElementById("deposit-form");
+const withdrawForm         = document.getElementById("withdraw-form");
+const transferForm         = document.getElementById("transfer-form");
+const loginForm            = document.getElementById("login-form");
+const createStaffForm      = document.getElementById("create-staff-form");
+const changePasswordForm   = document.getElementById("change-password-form");
+
+/* --- List panels — populated by render* functions --- */
+const customerList              = document.getElementById("customer-list");
+const transactionList           = document.getElementById("transaction-list");
+const auditList                 = document.getElementById("audit-list");
+const staffUserList             = document.getElementById("staff-user-list");
+const customerDetailPanel       = document.getElementById("customer-detail-panel");
 const customerTransactionsPanel = document.getElementById("customer-transactions-panel");
-const customerTimelinePanel = document.getElementById("customer-timeline-panel");
-const recentActivityPanel = document.getElementById("recent-activity-panel");
+const customerTimelinePanel     = document.getElementById("customer-timeline-panel");
+const recentActivityPanel       = document.getElementById("recent-activity-panel");
 
-const messageBox = document.getElementById("message");
-const editMessageBox = document.getElementById("edit-message");
-const loginMessageBox = document.getElementById("login-message");
-const createStaffMessageBox = document.getElementById("create-staff-message");
+/* --- Inline message boxes (next to their own form) --- */
+const messageBox              = document.getElementById("message");
+const editMessageBox          = document.getElementById("edit-message");
+const loginMessageBox         = document.getElementById("login-message");
+const createStaffMessageBox   = document.getElementById("create-staff-message");
 const changePasswordMessageBox = document.getElementById("change-password-message");
 
-const refreshBtn = document.getElementById("refresh-btn");
-const searchCustomersBtn = document.getElementById("search-customers-btn");
-const refreshTransactionsBtn = document.getElementById("refresh-transactions-btn");
-const filterTransactionsBtn = document.getElementById("filter-transactions-btn");
-const refreshAuditBtn = document.getElementById("refresh-audit-btn");
-const logoutBtn = document.getElementById("logout-btn");
-const exportCustomersBtn = document.getElementById("export-customers-btn");
-const exportTransactionsBtn = document.getElementById("export-transactions-btn");
+/* --- Action buttons --- */
+const refreshBtn              = document.getElementById("refresh-btn");
+const searchCustomersBtn      = document.getElementById("search-customers-btn");
+const refreshTransactionsBtn  = document.getElementById("refresh-transactions-btn");
+const filterTransactionsBtn   = document.getElementById("filter-transactions-btn");
+const refreshAuditBtn         = document.getElementById("refresh-audit-btn");
+const logoutBtn               = document.getElementById("logout-btn");
+const exportCustomersBtn      = document.getElementById("export-customers-btn");
+const exportTransactionsBtn   = document.getElementById("export-transactions-btn");
 
-const customerSearchInput = document.getElementById("customer-search");
+/* --- Search / filter inputs --- */
+const customerSearchInput  = document.getElementById("customer-search");
 const customerStatusFilter = document.getElementById("customer-status-filter");
-const customerSortFilter = document.getElementById("customer-sort-filter");
-const suggestionsBox = document.getElementById("customer-search-suggestions");
+const customerSortFilter   = document.getElementById("customer-sort-filter");
+const suggestionsBox       = document.getElementById("customer-search-suggestions");
 
-const auditActorFilter = document.getElementById("audit-actor-filter");
-const auditEventFilter = document.getElementById("audit-event-filter");
+const auditActorFilter  = document.getElementById("audit-actor-filter");
+const auditEventFilter  = document.getElementById("audit-event-filter");
 const auditResultFilter = document.getElementById("audit-result-filter");
 
-const confirmModal = document.getElementById("confirm-modal");
-const modalTitle = document.getElementById("modal-title");
-const modalMessage = document.getElementById("modal-message");
-const modalConfirm = document.getElementById("modal-confirm");
-const modalCancel = document.getElementById("modal-cancel");
+/* --- Confirm modal elements --- */
+const confirmModal  = document.getElementById("confirm-modal");
+const modalTitle    = document.getElementById("modal-title");
+const modalMessage  = document.getElementById("modal-message");
+const modalConfirm  = document.getElementById("modal-confirm");
+const modalCancel   = document.getElementById("modal-cancel");
 
-const toastContainer = document.getElementById("toast-container");
-const loadingOverlay = document.getElementById("loading-overlay");
+/* --- Toast container and loading overlay --- */
+const toastContainer  = document.getElementById("toast-container");
+const loadingOverlay  = document.getElementById("loading-overlay");
 
 // ---------------------------------------------------------------------------
-// State
+// Module-level state
 // ---------------------------------------------------------------------------
+
+/**
+ * Current user's role — set by fetchCurrentUser() after login.
+ * I default to 'staff' (least privilege) so the UI is safe
+ * even if the role fetch fails.
+ */
 window.currentUserRole = "staff";
+
+/** Callback stored by openConfirmModal and executed on confirm. */
 let confirmAction = null;
+
+/**
+ * In-memory copy of the most recently fetched customer list.
+ * I use this to filter suggestions client-side without a
+ * round-trip for every keystroke.
+ */
 let cachedCustomers = [];
-let customerChart = null;
+
+/** Chart.js instances — destroyed and recreated on each refresh. */
+let customerChart    = null;
 let transactionChart = null;
 
+/** Number of records per page for all paginated lists. */
 const PAGE_SIZE = 50;
-let customersPage = 0;
+
+/** Zero-based current page indices for the two paginated lists. */
+let customersPage    = 0;
 let transactionsPage = 0;
 
 // ---------------------------------------------------------------------------
 // UI helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Display a brief toast notification at the bottom of the page.
+ *
+ * @param {string}  message  - Text to display.
+ * @param {boolean} isError  - True for red error styling.
+ */
 function showToast(message, isError = false) {
     if (!toastContainer) return;
     const toast = document.createElement("div");
     toast.className = `toast ${isError ? "toast-error" : "toast-success"}`;
     toast.textContent = message;
     toastContainer.appendChild(toast);
+    // Auto-remove after 3 seconds.
     setTimeout(() => toast.remove(), 3000);
 }
 
+/**
+ * Show or hide the full-page loading overlay.
+ * I also set aria-busy on the body so screen readers announce
+ * that content is loading.
+ *
+ * @param {boolean} show - True to show the overlay.
+ */
 function setLoading(show) {
     if (!loadingOverlay) return;
     loadingOverlay.classList.toggle("hidden", !show);
     document.body.setAttribute("aria-busy", show ? "true" : "false");
 }
 
+/**
+ * Display a message in a form's inline status box.
+ * I also fire a toast so the message is visible even if the
+ * user has scrolled away from the form.
+ *
+ * @param {HTMLElement|null} box      - The status <p> element.
+ * @param {string}           message  - Text to display.
+ * @param {boolean}          isError  - True for red error styling.
+ */
 function _showStatusMessage(box, message, isError) {
     if (!box) return;
     box.textContent = message;
@@ -118,11 +217,34 @@ function _showStatusMessage(box, message, isError) {
     setTimeout(() => { box.textContent = ""; }, 3000);
 }
 
-function showMessage(message, isError = false) { _showStatusMessage(messageBox, message, isError); }
-function showEditMessage(message, isError = false) { _showStatusMessage(editMessageBox, message, isError); }
-function showCreateStaffMessage(message, isError = false) { _showStatusMessage(createStaffMessageBox, message, isError); }
-function showChangePasswordMessage(message, isError = false) { _showStatusMessage(changePasswordMessageBox, message, isError); }
+/** Show a message in the customer-create form's status box. */
+function showMessage(message, isError = false) {
+    _showStatusMessage(messageBox, message, isError);
+}
 
+/** Show a message in the customer-edit form's status box. */
+function showEditMessage(message, isError = false) {
+    _showStatusMessage(editMessageBox, message, isError);
+}
+
+/** Show a message in the create-staff form's status box. */
+function showCreateStaffMessage(message, isError = false) {
+    _showStatusMessage(createStaffMessageBox, message, isError);
+}
+
+/** Show a message in the change-password form's status box. */
+function showChangePasswordMessage(message, isError = false) {
+    _showStatusMessage(changePasswordMessageBox, message, isError);
+}
+
+/**
+ * Display a message on the login page.
+ * The login page does not use a toast — it writes directly to
+ * the inline message element which is announced by aria-live.
+ *
+ * @param {string}  message  - Text to display.
+ * @param {boolean} isError  - True for red error styling.
+ */
 function showLoginMessage(message, isError = false) {
     if (!loginMessageBox) return;
     loginMessageBox.textContent = message;
@@ -130,12 +252,28 @@ function showLoginMessage(message, isError = false) {
     showToast(message, isError);
 }
 
+/**
+ * Safely HTML-encode a string for injection into innerHTML.
+ * I route all user-supplied data through this before rendering
+ * it in the DOM to prevent XSS.
+ *
+ * @param   {*}      text - Value to encode (coerced to string).
+ * @returns {string}      - HTML-safe string.
+ */
 function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text ?? "";
     return div.innerHTML;
 }
 
+/**
+ * Format an ISO-8601 datetime string for display.
+ * I use the user's local locale with a consistent format:
+ * "07 Apr 2026, 14:30".
+ *
+ * @param   {string|null} value - ISO datetime string or null.
+ * @returns {string}            - Formatted string or "-".
+ */
 function formatDateTime(value) {
     if (!value) return "-";
     const date = new Date(value);
@@ -149,33 +287,53 @@ function formatDateTime(value) {
 // ---------------------------------------------------------------------------
 // Confirm modal
 // ---------------------------------------------------------------------------
+
+/**
+ * Tracks the element that was focused before the modal opened
+ * so I can restore focus when it closes (WCAG 2.1 requirement).
+ */
 let _modalPreviousFocus = null;
 
+/**
+ * Open the confirmation modal with a custom title and message.
+ *
+ * @param {string}   title     - Modal heading text.
+ * @param {string}   message   - Confirmation question text.
+ * @param {Function} onConfirm - Async callback to run on confirm.
+ */
 function openConfirmModal(title, message, onConfirm) {
     if (!confirmModal) return;
     _modalPreviousFocus = document.activeElement;
-    modalTitle.textContent = title;
+    modalTitle.textContent   = title;
     modalMessage.textContent = message;
     confirmAction = onConfirm;
     confirmModal.classList.remove("hidden");
+    // Move focus into the modal — default to Cancel for safety.
     modalCancel?.focus();
 }
 
+/**
+ * Close the confirmation modal and restore focus to the element
+ * that triggered it.
+ */
 function closeConfirmModal() {
     if (!confirmModal) return;
     confirmModal.classList.add("hidden");
     confirmAction = null;
-    if (_modalPreviousFocus && typeof _modalPreviousFocus.focus === "function") {
+    if (_modalPreviousFocus &&
+            typeof _modalPreviousFocus.focus === "function") {
         _modalPreviousFocus.focus();
     }
     _modalPreviousFocus = null;
 }
 
+/* Wire up modal button and backdrop-click handlers. */
 modalConfirm?.addEventListener("click", async () => {
     if (confirmAction) await confirmAction();
     closeConfirmModal();
 });
 modalCancel?.addEventListener("click", closeConfirmModal);
+// Click outside the modal card to dismiss.
 confirmModal?.addEventListener("click", (event) => {
     if (event.target === confirmModal) closeConfirmModal();
 });
@@ -183,6 +341,18 @@ confirmModal?.addEventListener("click", (event) => {
 // ---------------------------------------------------------------------------
 // Fetch helper
 // ---------------------------------------------------------------------------
+
+/**
+ * Parse a fetch Response as JSON and throw on HTTP errors.
+ *
+ * I redirect to the login page on 401 responses, except for
+ * the login endpoint itself (which legitimately returns 401 for
+ * bad credentials).
+ *
+ * @param   {Response} response - The fetch Response object.
+ * @returns {*}                 - Parsed JSON body.
+ * @throws  {Error}             - With the API's detail message.
+ */
 async function handleJsonResponse(response) {
     let data;
     try { data = await response.json(); } catch { data = {}; }
@@ -190,6 +360,8 @@ async function handleJsonResponse(response) {
     if (!response.ok) {
         if (response.status === 401) {
             const detail = data.detail || "Request failed.";
+            // Do not redirect for expected 401s from the login
+            // endpoint — the error is shown inline instead.
             if (detail !== "Invalid username or password." &&
                 detail !== "Invalid or missing API key.") {
                 window.location.href = "/login";
@@ -203,27 +375,43 @@ async function handleJsonResponse(response) {
 // ---------------------------------------------------------------------------
 // Current user
 // ---------------------------------------------------------------------------
+
+/**
+ * Fetch the current session user from /api/auth/me and update
+ * role-dependent UI elements.
+ *
+ * I set window.currentUserRole so the isPrivileged() and
+ * isSuperadmin() helpers work correctly throughout the page.
+ * I also populate the change-password user-id field and add
+ * the superadmin role option to the create-staff form if
+ * the current user has superadmin role.
+ */
 async function fetchCurrentUser() {
     try {
         const response = await fetch("/api/auth/me");
         const user = await handleJsonResponse(response);
         window.currentUserRole = user.role || "staff";
 
-        // Populate the change-password form with current user's ID
+        // Pre-fill the hidden user-id field so the change-
+        // password form knows which account to update.
         const cpUserId = document.getElementById("change-password-user-id");
         if (cpUserId && user.id) cpUserId.value = user.id;
 
-        // Show superadmin role option in the create-staff form if the current user is superadmin
+        // Superadmins get an extra role option in the
+        // create-staff form — only add it once.
         if (isSuperadmin()) {
             const roleSelect = document.getElementById("new-staff-role");
-            if (roleSelect && !roleSelect.querySelector("option[value='superadmin']")) {
+            if (roleSelect &&
+                    !roleSelect.querySelector("option[value='superadmin']")) {
                 const opt = document.createElement("option");
-                opt.value = "superadmin";
+                opt.value       = "superadmin";
                 opt.textContent = "Superadmin";
                 roleSelect.appendChild(opt);
             }
         }
     } catch (_) {
+        // Not authenticated or page is the login page — safe
+        // to default to staff (least privilege).
         window.currentUserRole = "staff";
     }
 }
@@ -231,15 +419,22 @@ async function fetchCurrentUser() {
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
+
+/**
+ * Render dashboard metric values into their respective elements.
+ * I map stat IDs to values from the API summary object.
+ *
+ * @param {Object} summary - DashboardSummaryResponse from the API.
+ */
 function renderDashboardSummary(summary) {
     const values = {
-        "stat-total-customers": summary.total_customers,
-        "stat-active-customers": summary.active_customers,
-        "stat-inactive-customers": summary.inactive_customers,
+        "stat-total-customers":       summary.total_customers,
+        "stat-active-customers":      summary.active_customers,
+        "stat-inactive-customers":    summary.inactive_customers,
         "stat-suspicious-transactions": summary.suspicious_transactions,
         "stat-low-balance-customers": summary.low_balance_customers,
-        "stat-total-transactions": summary.total_transactions,
-        "stat-total-balance": `£${summary.total_balance}`
+        "stat-total-transactions":    summary.total_transactions,
+        "stat-total-balance":         `£${summary.total_balance}`
     };
     Object.entries(values).forEach(([id, value]) => {
         const el = document.getElementById(id);
@@ -247,12 +442,22 @@ function renderDashboardSummary(summary) {
     });
 }
 
+/**
+ * Render or re-render the two Chart.js charts.
+ * I destroy existing instances before creating new ones to
+ * prevent canvas memory leaks.
+ *
+ * @param {Object} data - ChartDataResponse from the API.
+ */
 function renderCharts(data) {
+    // Chart.js is loaded via CDN — bail out if it failed to load.
     if (typeof Chart === "undefined") return;
-    const customerCanvas = document.getElementById("customerStatusChart");
+
+    const customerCanvas    = document.getElementById("customerStatusChart");
     const transactionCanvas = document.getElementById("transactionTypeChart");
 
-    if (customerChart) customerChart.destroy();
+    // Destroy existing instances before redrawing.
+    if (customerChart)    customerChart.destroy();
     if (transactionChart) transactionChart.destroy();
 
     if (customerCanvas) {
@@ -260,7 +465,12 @@ function renderCharts(data) {
             type: "doughnut",
             data: {
                 labels: ["Active", "Inactive"],
-                datasets: [{ data: [data.customer_status.active, data.customer_status.inactive] }]
+                datasets: [{
+                    data: [
+                        data.customer_status.active,
+                        data.customer_status.inactive
+                    ]
+                }]
             }
         });
     }
@@ -269,25 +479,33 @@ function renderCharts(data) {
             type: "bar",
             data: {
                 labels: ["Deposit", "Withdraw", "Transfer"],
-                datasets: [{ data: [data.transaction_types.deposit, data.transaction_types.withdraw, data.transaction_types.transfer] }]
+                datasets: [{
+                    data: [
+                        data.transaction_types.deposit,
+                        data.transaction_types.withdraw,
+                        data.transaction_types.transfer
+                    ]
+                }]
             },
             options: { plugins: { legend: { display: false } } }
         });
     }
 }
 
+/** Fetch dashboard summary stats and update metric cards. */
 async function fetchDashboardSummary() {
     try {
         const response = await fetch("/api/dashboard-summary");
-        const summary = await handleJsonResponse(response);
+        const summary  = await handleJsonResponse(response);
         renderDashboardSummary(summary);
     } catch (error) { showMessage(error.message, true); }
 }
 
+/** Fetch chart data and re-render both dashboard charts. */
 async function fetchChartData() {
     try {
         const response = await fetch("/api/chart-data");
-        const data = await handleJsonResponse(response);
+        const data     = await handleJsonResponse(response);
         renderCharts(data);
     } catch (error) { showMessage(error.message, true); }
 }
@@ -295,12 +513,21 @@ async function fetchChartData() {
 // ---------------------------------------------------------------------------
 // Customers (with pagination)
 // ---------------------------------------------------------------------------
+
+/**
+ * Render the search suggestion dropdown below the customer
+ * search input.
+ *
+ * @param {Array} matches - Customer objects to show as suggestions.
+ */
 function renderSuggestions(matches) {
     if (!suggestionsBox) return;
     if (!matches.length) {
         suggestionsBox.innerHTML = "";
         suggestionsBox.classList.add("hidden");
-        if (customerSearchInput) customerSearchInput.setAttribute("aria-expanded", "false");
+        if (customerSearchInput) {
+            customerSearchInput.setAttribute("aria-expanded", "false");
+        }
         return;
     }
     suggestionsBox.setAttribute("role", "listbox");
@@ -311,70 +538,122 @@ function renderSuggestions(matches) {
         </button>
     `).join("");
     suggestionsBox.classList.remove("hidden");
-    if (customerSearchInput) customerSearchInput.setAttribute("aria-expanded", "true");
+    if (customerSearchInput) {
+        customerSearchInput.setAttribute("aria-expanded", "true");
+    }
+    // Wire each suggestion item to open the customer detail view.
     suggestionsBox.querySelectorAll(".suggestion-item").forEach((btn) => {
         btn.addEventListener("click", async () => {
             suggestionsBox.classList.add("hidden");
-            if (customerSearchInput) customerSearchInput.setAttribute("aria-expanded", "false");
+            if (customerSearchInput) {
+                customerSearchInput.setAttribute("aria-expanded", "false");
+            }
             await viewCustomer(Number(btn.dataset.id));
         });
     });
 }
 
+/**
+ * Filter cachedCustomers by the current search input value and
+ * render matching suggestions.
+ * I search client-side against the cached list to avoid a
+ * round-trip on every keystroke.
+ */
 function updateSuggestions() {
     if (!customerSearchInput) return;
     const query = customerSearchInput.value.trim().toLowerCase();
     if (!query) { renderSuggestions([]); return; }
     const matches = cachedCustomers
-        .filter((c) => c.full_name.toLowerCase().includes(query) ||
-                       c.email.toLowerCase().includes(query) ||
-                       c.account_number.toLowerCase().includes(query))
+        .filter((c) =>
+            c.full_name.toLowerCase().includes(query) ||
+            c.email.toLowerCase().includes(query) ||
+            c.account_number.toLowerCase().includes(query)
+        )
         .slice(0, 6);
     renderSuggestions(matches);
 }
 
+/**
+ * Extract up to two initials from a full name.
+ * e.g. "Alice Johnson" → "AJ", "Bob" → "B"
+ *
+ * @param   {string} name - Full name string.
+ * @returns {string}      - One or two uppercase initials.
+ */
 function initials(name) {
-    return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+    return name
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((w) => w[0].toUpperCase())
+        .join("");
 }
 
+/**
+ * Render the customer list panel.
+ * I update cachedCustomers so the suggestion filter can work
+ * against the latest data without an extra API call.
+ * Buttons use data-action / data-id attributes instead of
+ * onclick= so they comply with the strict CSP.
+ *
+ * @param {Array} customers - CustomerResponse objects from the API.
+ */
 function renderCustomers(customers) {
     if (!customerList) return;
     cachedCustomers = customers;
 
     if (!customers.length) {
-        customerList.innerHTML = `<div class="customer-item"><p class="muted-text">No customer records found.</p></div>`;
+        customerList.innerHTML =
+            `<div class="customer-item"><p class="muted-text">No customer records found.</p></div>`;
         return;
     }
     const mgr = isPrivileged();
     customerList.innerHTML = customers.map((c) => `
-        <div class="customer-row ${c.is_active ? "" : "inactive"}">
+        <div class="customer-row ${c.is_active ? "" : "inactive"}" data-customer-id="${c.id}">
             <div class="customer-avatar" aria-hidden="true">${escapeHtml(initials(c.full_name))}</div>
             <div class="customer-main">
                 <div class="customer-name">${escapeHtml(c.full_name)}</div>
                 <div class="customer-sub">${escapeHtml(c.account_number)} &middot; ${escapeHtml(c.email)}</div>
+                <div class="customer-actions" style="margin-top:8px;">
+                    <button type="button" class="ghost-btn" data-action="view" data-id="${c.id}">View</button>
+                    ${mgr ? `<button type="button" class="ghost-btn" data-action="edit" data-id="${c.id}">Edit</button>` : ""}
+                    ${mgr && c.is_active  ? `<button type="button" class="danger-btn"  data-action="deactivate" data-id="${c.id}">Deactivate</button>` : ""}
+                    ${mgr && !c.is_active ? `<button type="button" class="success-btn" data-action="activate"   data-id="${c.id}">Activate</button>` : ""}
+                    ${mgr ? `<button type="button" class="danger-btn" data-action="delete" data-id="${c.id}">Delete</button>` : ""}
+                </div>
             </div>
             <div class="customer-right">
                 <div class="customer-balance">£${c.balance.toLocaleString()}</div>
                 <span class="status-pill ${c.is_active ? "status-active" : "status-inactive"}">
                     ${c.is_active ? "Active" : "Inactive"}
                 </span>
-                <div class="customer-actions">
-                    <button type="button" class="ghost-btn" onclick="viewCustomer(${c.id})">View</button>
-                    ${mgr ? `<button type="button" class="ghost-btn" onclick="startEditCustomer(${c.id})">Edit</button>` : ""}
-                    ${mgr && c.is_active ? `<button type="button" class="danger-btn" onclick="deactivateCustomer(${c.id})">Deactivate</button>` : ""}
-                    ${mgr && !c.is_active ? `<button type="button" class="success-btn" onclick="reactivateCustomer(${c.id})">Activate</button>` : ""}
-                    ${mgr ? `<button type="button" class="danger-btn" onclick="deleteCustomer(${c.id})">Delete</button>` : ""}
-                </div>
             </div>
         </div>
     `).join("");
 }
 
+/**
+ * Update the pagination info text for a paginated list.
+ *
+ * @param {string} pageInfoId - ID of the <span> element.
+ * @param {number} page       - Zero-based current page index.
+ * @param {number} count      - Number of records on this page.
+ */
 function updatePaginationInfo(pageInfoId, page, count) {
     const el = document.getElementById(pageInfoId);
-    if (el) el.textContent = `Page ${page + 1}${count < PAGE_SIZE ? " (last)" : ""}`;
+    if (el) {
+        el.textContent =
+            `Page ${page + 1}${count < PAGE_SIZE ? " (last)" : ""}`;
+    }
 }
 
+/**
+ * Fetch a page of customers from the API and render them.
+ * I read the current search, status, and sort values from the
+ * filter controls and build the query string from them.
+ *
+ * @param {boolean} resetPage - If true, jump back to page 0.
+ */
 async function fetchCustomers(resetPage = false) {
     if (!customerList) return;
     if (resetPage) customersPage = 0;
@@ -387,15 +666,19 @@ async function fetchCustomers(resetPage = false) {
     if (search) params.append("search", search);
     if (status) params.append("status", status);
     if (sortBy) params.append("sort_by", sortBy);
-    params.append("limit", PAGE_SIZE);
+    params.append("limit",  PAGE_SIZE);
     params.append("offset", customersPage * PAGE_SIZE);
 
     try {
-        const response = await fetch(`/api/customers?${params.toString()}`);
+        const response  = await fetch(`/api/customers?${params.toString()}`);
         const customers = await handleJsonResponse(response);
         renderCustomers(customers);
-        updatePaginationInfo("customers-page-info", customersPage, customers.length);
+        updatePaginationInfo(
+            "customers-page-info", customersPage, customers.length
+        );
 
+        // Disable prev on page 0; disable next when we got fewer
+        // records than the page size (signals last page).
         const prevBtn = document.getElementById("customers-prev-btn");
         const nextBtn = document.getElementById("customers-next-btn");
         if (prevBtn) prevBtn.disabled = customersPage === 0;
@@ -406,54 +689,183 @@ async function fetchCustomers(resetPage = false) {
 // ---------------------------------------------------------------------------
 // Customer detail
 // ---------------------------------------------------------------------------
-function renderCustomerDetail(customer) {
+
+/**
+ * Render the full customer detail panel, including a rich header,
+ * info grid, transaction summary, and quick-action buttons.
+ *
+ * I compute deposit/withdrawal/transfer totals and the flagged-
+ * transaction count from the pre-fetched transactions array so
+ * no extra API call is needed.
+ *
+ * Quick-action buttons inside the panel are wired via
+ * addEventListener (not onclick=) after the HTML is written, to
+ * comply with the Content-Security-Policy.
+ *
+ * @param {Object} customer     - CustomerResponse from the API.
+ * @param {Array}  transactions - TransactionResponse array (may be empty).
+ */
+function renderCustomerDetail(customer, transactions = []) {
     if (!customerDetailPanel) return;
+
+    // Compute transaction totals from the passed array.
+    const totalDeposits  = transactions
+        .filter(t => t.transaction_type === "deposit")
+        .reduce((s, t) => s + t.amount, 0);
+    const totalWithdraws = transactions
+        .filter(t => t.transaction_type === "withdraw")
+        .reduce((s, t) => s + t.amount, 0);
+    const totalTransfers = transactions
+        .filter(t => t.transaction_type === "transfer")
+        .reduce((s, t) => s + t.amount, 0);
+    const flagged = transactions.filter(t => t.risk_flag).length;
+    const lastTxn = transactions.length
+        ? formatDateTime(transactions[0].created_at)
+        : "None";
+
+    const mgr          = isPrivileged();
+    const statusClass  = customer.is_active ? "status-active" : "status-inactive";
+    const statusLabel  = customer.is_active ? "Active" : "Inactive";
+    // Use warning colour for low balances, success for healthy ones.
+    const balanceColour = customer.balance < 250
+        ? "var(--warning)" : "var(--success)";
+
     customerDetailPanel.innerHTML = `
-        <div class="customer-row ${customer.is_active ? "" : "inactive"}" style="flex-wrap:wrap;gap:12px;">
-            <div class="customer-avatar" style="width:52px;height:52px;font-size:18px;" aria-hidden="true">${escapeHtml(initials(customer.full_name))}</div>
-            <div class="customer-main">
-                <div class="customer-name" style="font-size:16px;">${escapeHtml(customer.full_name)}</div>
-                <div class="customer-sub">${escapeHtml(customer.account_number)}</div>
-                <div class="customer-sub">${escapeHtml(customer.email)}</div>
+        <!-- Header: avatar, name, account, balance, status -->
+        <div style="display:flex;align-items:center;gap:14px;padding:16px;border-bottom:1px solid var(--border);">
+            <div class="customer-avatar" style="width:56px;height:56px;font-size:20px;flex-shrink:0;" aria-hidden="true">${escapeHtml(initials(customer.full_name))}</div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:17px;font-weight:700;margin-bottom:2px;">${escapeHtml(customer.full_name)}</div>
+                <div style="font-size:13px;color:var(--muted);">
+                    <span style="font-family:ui-monospace,monospace;">${escapeHtml(customer.account_number)}</span>
+                    &nbsp;&middot;&nbsp;${escapeHtml(customer.email)}
+                </div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:6px;min-width:120px;">
-                <div class="customer-balance" style="font-size:20px;">£${customer.balance.toLocaleString()}</div>
-                <span class="status-pill ${customer.is_active ? "status-active" : "status-inactive"}">
-                    ${customer.is_active ? "Active" : "Inactive"}
-                </span>
+            <div style="text-align:right;flex-shrink:0;">
+                <div style="font-size:22px;font-weight:800;color:${balanceColour};">£${customer.balance.toLocaleString()}</div>
+                <span class="status-pill ${statusClass}" style="margin-top:4px;">${statusLabel}</span>
             </div>
         </div>
-        <div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:13px;color:#64748b;border-top:1px solid #e2e8f0;">
-            <div><strong style="color:#0f172a;">ID</strong><br>#${customer.id}</div>
-            <div><strong style="color:#0f172a;">Created</strong><br>${escapeHtml(formatDateTime(customer.created_at))}</div>
-            <div><strong style="color:#0f172a;">Updated</strong><br>${escapeHtml(formatDateTime(customer.updated_at))}</div>
+
+        <!-- Info grid: 2-column metadata cells -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--border);">
+            <div style="padding:10px 16px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px;">Customer ID</div>
+                <div style="font-weight:600;">#${customer.id}</div>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px;">Account Status</div>
+                <div style="font-weight:600;">${statusLabel}</div>
+            </div>
+            <div style="padding:10px 16px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px;">Account Opened</div>
+                <div style="font-weight:600;">${escapeHtml(formatDateTime(customer.created_at))}</div>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px;">Last Updated</div>
+                <div style="font-weight:600;">${escapeHtml(formatDateTime(customer.updated_at))}</div>
+            </div>
+            <div style="padding:10px 16px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px;">Last Transaction</div>
+                <div style="font-weight:600;">${escapeHtml(lastTxn)}</div>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:3px;">Flagged Transactions</div>
+                <div style="font-weight:600;color:${flagged ? "var(--danger)" : "inherit"};">${flagged > 0 ? `⚠ ${flagged}` : "None"}</div>
+            </div>
+        </div>
+
+        <!-- Transaction summary: totals by type -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--border);">
+            <div style="padding:10px 14px;text-align:center;border-right:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--success);margin-bottom:3px;">Total Deposited</div>
+                <div style="font-size:15px;font-weight:700;color:var(--success);">£${totalDeposits.toLocaleString()}</div>
+            </div>
+            <div style="padding:10px 14px;text-align:center;border-right:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--warning);margin-bottom:3px;">Total Withdrawn</div>
+                <div style="font-size:15px;font-weight:700;color:var(--warning);">£${totalWithdraws.toLocaleString()}</div>
+            </div>
+            <div style="padding:10px 14px;text-align:center;">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--info);margin-bottom:3px;">Total Transferred</div>
+                <div style="font-size:15px;font-weight:700;color:var(--info);">£${totalTransfers.toLocaleString()}</div>
+            </div>
+        </div>
+
+        <!-- Quick actions for manager+ users -->
+        <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;">
+            ${mgr && customer.is_active  ? `<button type="button" class="danger-btn"  data-action="deactivate" data-id="${customer.id}">Deactivate Account</button>` : ""}
+            ${mgr && !customer.is_active ? `<button type="button" class="success-btn" data-action="activate"   data-id="${customer.id}">Activate Account</button>` : ""}
+            ${mgr ? `<button type="button" class="ghost-btn" data-action="edit" data-id="${customer.id}">Edit Details</button>` : ""}
+            ${mgr ? `<button type="button" class="danger-btn" data-action="delete" data-id="${customer.id}">Delete Customer</button>` : ""}
         </div>
     `;
+
+    // Wire the quick-action buttons using addEventListener after
+    // the HTML has been written to the DOM.  I cannot use onclick=
+    // because the CSP blocks inline event handlers.
+    customerDetailPanel.querySelectorAll("button[data-action]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            const action = btn.dataset.action;
+            const id     = parseInt(btn.dataset.id, 10);
+            if (action === "deactivate") deactivateCustomer(id);
+            if (action === "activate")   reactivateCustomer(id);
+            if (action === "edit")       startEditCustomer(id);
+            if (action === "delete")     deleteCustomer(id);
+        });
+    });
 }
 
 // ---------------------------------------------------------------------------
 // Transactions (with pagination)
 // ---------------------------------------------------------------------------
+
+/**
+ * Return the CSS class name for a transaction type status pill.
+ *
+ * @param   {string} type - 'deposit', 'withdraw', or 'transfer'.
+ * @returns {string}      - CSS class name.
+ */
 function transactionStatusClass(type) {
-    if (type === "deposit") return "status-deposit";
+    if (type === "deposit")  return "status-deposit";
     if (type === "withdraw") return "status-withdraw";
     if (type === "transfer") return "status-transfer";
     return "status-active";
 }
 
-function renderTransactions(transactions, targetElement = transactionList, emptyText = "No transactions found.") {
+/**
+ * Render a list of transactions into a target container element.
+ * I use this for both the global transaction list and the
+ * per-customer transactions panel inside the detail view.
+ *
+ * @param {Array}           transactions  - TransactionResponse array.
+ * @param {HTMLElement|null} targetElement - Container to write into.
+ * @param {string}          emptyText     - Text shown when list is empty.
+ */
+function renderTransactions(
+    transactions,
+    targetElement = transactionList,
+    emptyText = "No transactions found."
+) {
     if (!targetElement) return;
     if (!transactions.length) {
-        targetElement.innerHTML = `<div class="customer-item"><p class="muted-text">${emptyText}</p></div>`;
+        targetElement.innerHTML =
+            `<div class="customer-item"><p class="muted-text">${emptyText}</p></div>`;
         return;
     }
     targetElement.innerHTML = transactions.map((t) => {
         const type = t.transaction_type;
-        const dotClass = type === "deposit" ? "txn-deposit" : type === "withdraw" ? "txn-withdraw" : type === "transfer" ? "txn-transfer" : "txn-default";
-        const amtClass = type === "deposit" ? "deposit" : type === "withdraw" ? "withdraw" : type === "transfer" ? "transfer" : "";
+        // Coloured dot class depends on transaction type.
+        const dotClass = type === "deposit"  ? "txn-deposit"  :
+                         type === "withdraw" ? "txn-withdraw" :
+                         type === "transfer" ? "txn-transfer" : "txn-default";
+        // Amount sign colour class.
+        const amtClass = type === "deposit"  ? "deposit"  :
+                         type === "withdraw" ? "withdraw" :
+                         type === "transfer" ? "transfer" : "";
+        // Build a "From #X → To #Y" label from the customer IDs.
         const fromTo = [
             t.from_customer_id ? `From #${t.from_customer_id}` : null,
-            t.to_customer_id   ? `To #${t.to_customer_id}` : null
+            t.to_customer_id   ? `To #${t.to_customer_id}`     : null
         ].filter(Boolean).join(" → ");
         return `
         <div class="transaction-row">
@@ -471,24 +883,31 @@ function renderTransactions(transactions, targetElement = transactionList, empty
     }).join("");
 }
 
+/**
+ * Fetch a page of transactions with optional filters and render them.
+ *
+ * @param {boolean} resetPage - If true, reset to page 0.
+ */
 async function fetchTransactions(resetPage = false) {
     if (!transactionList) return;
     if (resetPage) transactionsPage = 0;
 
     const account = document.getElementById("transaction-account-filter")?.value.trim() || "";
-    const type = document.getElementById("transaction-type-filter")?.value || "";
+    const type    = document.getElementById("transaction-type-filter")?.value || "";
 
     const params = new URLSearchParams();
-    if (account) params.append("account_number", account);
-    if (type) params.append("transaction_type", type);
-    params.append("limit", PAGE_SIZE);
+    if (account) params.append("account_number",    account);
+    if (type)    params.append("transaction_type", type);
+    params.append("limit",  PAGE_SIZE);
     params.append("offset", transactionsPage * PAGE_SIZE);
 
     try {
-        const response = await fetch(`/api/transactions?${params.toString()}`);
+        const response     = await fetch(`/api/transactions?${params.toString()}`);
         const transactions = await handleJsonResponse(response);
         renderTransactions(transactions);
-        updatePaginationInfo("transactions-page-info", transactionsPage, transactions.length);
+        updatePaginationInfo(
+            "transactions-page-info", transactionsPage, transactions.length
+        );
 
         const prevBtn = document.getElementById("transactions-prev-btn");
         const nextBtn = document.getElementById("transactions-next-btn");
@@ -497,21 +916,43 @@ async function fetchTransactions(resetPage = false) {
     } catch (error) { showMessage(error.message, true); }
 }
 
+/**
+ * Fetch and render transactions for a specific account number
+ * in the customer transactions panel.
+ * This function is kept for convenience but is not used directly
+ * in the current viewCustomer flow (transactions are fetched
+ * there and passed to renderTransactions directly).
+ *
+ * @param {string} accountNumber - Customer account number to filter by.
+ */
 async function fetchTransactionsForCustomer(accountNumber) {
     try {
-        const response = await fetch(`/api/transactions?account_number=${encodeURIComponent(accountNumber)}&limit=${PAGE_SIZE}`);
+        const response = await fetch(
+            `/api/transactions?account_number=${encodeURIComponent(accountNumber)}&limit=${PAGE_SIZE}`
+        );
         const transactions = await handleJsonResponse(response);
-        renderTransactions(transactions, customerTransactionsPanel, `No transactions found for account ${accountNumber}.`);
+        renderTransactions(
+            transactions,
+            customerTransactionsPanel,
+            `No transactions found for account ${accountNumber}.`
+        );
     } catch (error) { showMessage(error.message, true); }
 }
 
 // ---------------------------------------------------------------------------
-// Timeline
+// Customer timeline
 // ---------------------------------------------------------------------------
+
+/**
+ * Render the customer activity timeline panel.
+ *
+ * @param {Array} items - CustomerTimelineItem objects from the API.
+ */
 function renderTimeline(items) {
     if (!customerTimelinePanel) return;
     if (!items.length) {
-        customerTimelinePanel.innerHTML = `<div class="transaction-item"><p class="muted-text">No timeline events found.</p></div>`;
+        customerTimelinePanel.innerHTML =
+            `<div class="transaction-item"><p class="muted-text">No timeline events found.</p></div>`;
         return;
     }
     customerTimelinePanel.innerHTML = items.map((item) => `
@@ -526,6 +967,11 @@ function renderTimeline(items) {
     `).join("");
 }
 
+/**
+ * Fetch the activity timeline for a customer and render it.
+ *
+ * @param {number} customerId - Customer primary key.
+ */
 async function fetchCustomerTimeline(customerId) {
     try {
         const response = await fetch(`/api/customers/${customerId}/timeline`);
@@ -537,17 +983,29 @@ async function fetchCustomerTimeline(customerId) {
 // ---------------------------------------------------------------------------
 // Audit logs
 // ---------------------------------------------------------------------------
+
+/**
+ * Render the audit log list and the recent-activity panel.
+ * I also update recentActivityPanel (shown at the top of the
+ * dashboard) with the six most recent log entries.
+ *
+ * @param {Array} logs - AuditLogResponse objects from the API.
+ */
 function renderAuditLogs(logs) {
     if (!auditList) return;
     if (!logs.length) {
-        auditList.innerHTML = `<div class="audit-item"><p class="muted-text">No audit logs found.</p></div>`;
+        auditList.innerHTML =
+            `<div class="audit-item"><p class="muted-text">No audit logs found.</p></div>`;
         return;
     }
     auditList.innerHTML = logs.map((log) => {
         const isSuccess = log.result === "success";
         const isFailure = log.result === "failure";
-        const dotClass  = isSuccess ? "audit-result-success" : isFailure ? "audit-result-failure" : "audit-result-other";
-        const chipClass = isSuccess ? "chip-success" : isFailure ? "chip-failure" : "chip-other";
+        // Coloured dot and chip classes based on result.
+        const dotClass  = isSuccess ? "audit-result-success" :
+                          isFailure ? "audit-result-failure"  : "audit-result-other";
+        const chipClass = isSuccess ? "chip-success" :
+                          isFailure ? "chip-failure"  : "chip-other";
         return `
         <div class="audit-row">
             <div class="audit-result-dot ${dotClass}" aria-hidden="true"></div>
@@ -560,6 +1018,8 @@ function renderAuditLogs(logs) {
         </div>`;
     }).join("");
 
+    // Populate the dashboard recent-activity panel with the
+    // first six entries from the current log fetch.
     if (recentActivityPanel) {
         recentActivityPanel.innerHTML = logs.slice(0, 6).map((log) => `
             <div class="activity-item">
@@ -573,31 +1033,61 @@ function renderAuditLogs(logs) {
     }
 }
 
+/**
+ * Fetch audit logs with the current filter values and render them.
+ * Staff-role users receive a 403 — I show a friendly message
+ * instead of an error toast in that case.
+ */
 async function fetchAuditLogs() {
     if (!auditList) return;
     const params = new URLSearchParams();
-    if (auditActorFilter?.value.trim()) params.append("actor", auditActorFilter.value.trim());
-    if (auditEventFilter?.value.trim()) params.append("event_type", auditEventFilter.value.trim());
-    if (auditResultFilter?.value) params.append("result", auditResultFilter.value);
+    if (auditActorFilter?.value.trim())
+        params.append("actor",      auditActorFilter.value.trim());
+    if (auditEventFilter?.value.trim())
+        params.append("event_type", auditEventFilter.value.trim());
+    if (auditResultFilter?.value)
+        params.append("result",     auditResultFilter.value);
 
-    const url = params.toString() ? `/api/audit-logs?${params.toString()}` : "/api/audit-logs";
+    const url = params.toString()
+        ? `/api/audit-logs?${params.toString()}`
+        : "/api/audit-logs";
     try {
         const response = await fetch(url);
-        const logs = await handleJsonResponse(response);
+        const logs     = await handleJsonResponse(response);
         renderAuditLogs(logs);
     } catch (error) {
         if (isPrivileged()) {
             showMessage(error.message, true);
         } else {
-            auditList.innerHTML = `<div class="audit-item"><p class="muted-text">Audit log is restricted to manager accounts.</p></div>`;
+            // Staff users — show a non-alarming message.
+            auditList.innerHTML =
+                `<div class="audit-item"><p class="muted-text">Audit log is restricted to manager accounts.</p></div>`;
         }
     }
 }
 
+// ---------------------------------------------------------------------------
+// Role helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Return true if the current user has manager or superadmin role.
+ * I use this to conditionally render edit/delete/deactivate
+ * buttons and manager-only form sections.
+ *
+ * @returns {boolean}
+ */
 function isPrivileged() {
     return ["manager", "superadmin"].includes(window.currentUserRole);
 }
 
+/**
+ * Return true if the current user has the superadmin role.
+ * I use this to show the superadmin role option in the
+ * create-staff form.
+ *
+ * @returns {boolean}
+ */
 function isSuperadmin() {
     return window.currentUserRole === "superadmin";
 }
@@ -605,25 +1095,45 @@ function isSuperadmin() {
 // ---------------------------------------------------------------------------
 // Staff users
 // ---------------------------------------------------------------------------
+
+/**
+ * Return an HTML status pill element for a staff user's role.
+ *
+ * @param   {string} role - 'staff', 'manager', or 'superadmin'.
+ * @returns {string}      - HTML string for the pill element.
+ */
 function rolePill(role) {
-    const cls = role === "superadmin" ? "status-superadmin" : role === "manager" ? "status-manager" : "status-staff";
+    const cls = role === "superadmin" ? "status-superadmin" :
+                role === "manager"    ? "status-manager"    : "status-staff";
     return `<span class="status-pill ${cls}">${escapeHtml(role)}</span>`;
 }
 
+/**
+ * Render the staff user list panel.
+ * I show an "Unlock" button only for accounts that are locked
+ * AND can be unlocked by the current user (superadmin required
+ * for manager/superadmin accounts).
+ *
+ * @param {Array} users - StaffUserResponse objects from the API.
+ */
 function renderStaffUsers(users) {
     if (!staffUserList) return;
     if (!isPrivileged()) {
-        staffUserList.innerHTML = `<div class="customer-item"><p class="muted-text">Manager access required.</p></div>`;
+        staffUserList.innerHTML =
+            `<div class="customer-item"><p class="muted-text">Manager access required.</p></div>`;
         return;
     }
     if (!users.length) {
-        staffUserList.innerHTML = `<div class="customer-item"><p class="muted-text">No staff users found.</p></div>`;
+        staffUserList.innerHTML =
+            `<div class="customer-item"><p class="muted-text">No staff users found.</p></div>`;
         return;
     }
     staffUserList.innerHTML = users.map((user) => {
-        // Superadmin can unlock anyone; manager can only unlock staff-role accounts
         const targetIsPrivileged = ["manager", "superadmin"].includes(user.role);
+        // This manager CAN unlock: target is staff, or actor is superadmin.
         const canUnlock = user.is_locked && (isSuperadmin() || !targetIsPrivileged);
+        // Show a note when the account is locked but the current
+        // user does not have sufficient privilege to unlock it.
         const unlockBlockedMsg = user.is_locked && targetIsPrivileged && !isSuperadmin()
             ? `<span class="warning-inline" title="Only superadmin can unlock this account">Locked — superadmin required</span>`
             : "";
@@ -641,45 +1151,71 @@ function renderStaffUsers(users) {
             <div class="staff-right">
                 ${rolePill(user.role)}
                 ${user.is_locked ? `<span class="status-pill status-locked">Locked</span>` : ""}
-                ${canUnlock ? `<button type="button" class="success-btn" onclick="unlockStaffUser(${user.id})">Unlock</button>` : ""}
+                ${canUnlock ? `<button type="button" class="success-btn" data-action="unlock-staff" data-id="${user.id}">Unlock</button>` : ""}
                 ${unlockBlockedMsg}
             </div>
         </div>`;
     }).join("");
 }
 
+/**
+ * Fetch all staff users and render the list.
+ * I skip the request entirely if the current user is not
+ * privileged to avoid an unnecessary 403 response.
+ */
 async function fetchStaffUsers() {
     if (!staffUserList || !isPrivileged()) return;
     try {
         const response = await fetch("/api/staff-users");
-        const users = await handleJsonResponse(response);
+        const users    = await handleJsonResponse(response);
         renderStaffUsers(users);
     } catch (error) { showMessage(error.message, true); }
 }
 
+/**
+ * Show a confirmation modal then unlock the given staff account.
+ *
+ * @param {number} userId - Primary key of the account to unlock.
+ */
 async function unlockStaffUser(userId) {
-    openConfirmModal("Unlock User", "Unlock this staff account?", async () => {
-        try {
-            const response = await fetch(`/api/staff-users/${userId}/unlock`, { method: "PATCH" });
-            await handleJsonResponse(response);
-            showToast("Staff user unlocked successfully.");
-            fetchStaffUsers();
-            fetchAuditLogs();
-        } catch (error) { showToast(error.message, true); }
-    });
+    openConfirmModal(
+        "Unlock User",
+        "Unlock this staff account?",
+        async () => {
+            try {
+                const response = await fetch(
+                    `/api/staff-users/${userId}/unlock`,
+                    { method: "PATCH" }
+                );
+                await handleJsonResponse(response);
+                showToast("Staff user unlocked successfully.");
+                fetchStaffUsers();
+                fetchAuditLogs();
+            } catch (error) { showToast(error.message, true); }
+        }
+    );
 }
 
 // ---------------------------------------------------------------------------
-// Export
+// CSV export helper
 // ---------------------------------------------------------------------------
+
+/**
+ * Download a CSV file from ``url`` using a temporary anchor element.
+ * I create a Blob URL, click it programmatically, then revoke it
+ * to avoid memory leaks.
+ *
+ * @param {string} url      - API endpoint that returns CSV text.
+ * @param {string} filename - Suggested filename for the download.
+ */
 async function exportFile(url, filename) {
     const response = await fetch(url);
     if (!response.ok) throw new Error("Export failed.");
-    const text = await response.text();
-    const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
+    const text    = await response.text();
+    const blob    = new Blob([text], { type: "text/csv;charset=utf-8;" });
     const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = blobUrl;
+    const link    = document.createElement("a");
+    link.href     = blobUrl;
     link.download = filename;
     document.body.appendChild(link);
     link.click();
@@ -690,95 +1226,209 @@ async function exportFile(url, filename) {
 // ---------------------------------------------------------------------------
 // Customer actions
 // ---------------------------------------------------------------------------
+
+/**
+ * Load a customer's full detail view — fetches the customer
+ * record and their transactions, then renders all four panels:
+ * detail card, transactions, timeline, and pre-fills the
+ * edit form for manager users.
+ *
+ * I wrap each rendering step in its own try/catch so a failure
+ * in one panel (e.g. a template error in renderCustomerDetail)
+ * does not silently prevent the other panels from rendering.
+ *
+ * @param {number} customerId - Primary key of the customer.
+ */
 async function viewCustomer(customerId) {
     try {
-        const response = await fetch(`/api/customers/${customerId}`);
-        const customer = await handleJsonResponse(response);
+        const customer = await handleJsonResponse(
+            await fetch(`/api/customers/${customerId}`)
+        );
+        const transactions = await handleJsonResponse(
+            await fetch(
+                `/api/transactions?account_number=${encodeURIComponent(customer.account_number)}&limit=200`
+            )
+        );
 
-        renderCustomerDetail(customer);
-        await fetchTransactionsForCustomer(customer.account_number);
-        await fetchCustomerTimeline(customer.id);
+        // Render the detail card — isolated catch so a rendering
+        // bug here does not block the transactions panel below.
+        try { renderCustomerDetail(customer, transactions); }
+        catch (e) { console.error("Detail render error:", e); }
 
-        if (window.currentUserRole === "manager") {
-            const editId = document.getElementById("edit-customer-id");
-            const editName = document.getElementById("edit-full-name");
+        // Always render transactions independently.
+        renderTransactions(
+            transactions,
+            customerTransactionsPanel,
+            `No transactions found for ${customer.account_number}.`
+        );
+
+        // Fetch the timeline — isolated so network errors here
+        // do not cause the rest of the view to disappear.
+        try { await fetchCustomerTimeline(customer.id); }
+        catch (e) { console.error("Timeline error:", e); }
+
+        // Pre-fill the edit form for manager and superadmin users.
+        if (isPrivileged()) {
+            const editId    = document.getElementById("edit-customer-id");
+            const editName  = document.getElementById("edit-full-name");
             const editEmail = document.getElementById("edit-email");
-            if (editId) editId.value = customer.id;
-            if (editName) editName.value = customer.full_name;
+            if (editId)    editId.value    = customer.id;
+            if (editName)  editName.value  = customer.full_name;
             if (editEmail) editEmail.value = customer.email;
         }
 
-        document.getElementById("customer-view-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } catch (error) { showMessage(error.message, true); }
+        document.getElementById("customer-view-section")?.scrollIntoView({
+            behavior: "smooth", block: "start"
+        });
+        showToast(`Viewing ${customer.full_name}`);
+    } catch (error) { showToast(error.message, true); }
 }
 
+/**
+ * Load a customer record into the edit form.
+ * I populate all three edit fields and move focus to the name
+ * input so the user can start editing immediately.
+ *
+ * @param {number} customerId - Primary key of the customer to edit.
+ */
 async function startEditCustomer(customerId) {
     try {
-        const response = await fetch(`/api/customers/${customerId}`);
-        const customer = await handleJsonResponse(response);
-        document.getElementById("edit-customer-id").value = customer.id;
-        document.getElementById("edit-full-name").value = customer.full_name;
-        document.getElementById("edit-email").value = customer.email;
-        showEditMessage(`Loaded ${customer.full_name} into edit form.`);
+        const response  = await fetch(`/api/customers/${customerId}`);
+        const customer  = await handleJsonResponse(response);
+        document.getElementById("edit-customer-id").value    = customer.id;
+        document.getElementById("edit-full-name").value      = customer.full_name;
+        document.getElementById("edit-email").value          = customer.email;
+        showToast(`Loaded ${customer.full_name} into edit form.`);
         document.getElementById("edit-full-name").focus();
-    } catch (error) { showEditMessage(error.message, true); }
+    } catch (error) { showToast(error.message, true); }
 }
 
+/**
+ * Show a confirmation modal and then deactivate a customer.
+ * On success I refresh the customer list, audit log, dashboard
+ * stats, and charts so all displayed data stays consistent.
+ *
+ * @param {number} customerId - Primary key of the customer.
+ */
 async function deactivateCustomer(customerId) {
-    openConfirmModal("Deactivate Customer", "Deactivate this customer account?", async () => {
-        try {
-            await handleJsonResponse(await fetch(`/api/customers/${customerId}/deactivate`, { method: "PATCH" }));
-            showMessage("Customer deactivated successfully.");
-            fetchCustomers(); fetchAuditLogs(); fetchDashboardSummary(); fetchChartData();
-        } catch (error) { showMessage(error.message, true); }
-    });
+    openConfirmModal(
+        "Deactivate Customer",
+        "Deactivate this customer account?",
+        async () => {
+            try {
+                await handleJsonResponse(
+                    await fetch(
+                        `/api/customers/${customerId}/deactivate`,
+                        { method: "PATCH" }
+                    )
+                );
+                showToast("Customer deactivated successfully.");
+                fetchCustomers();
+                fetchAuditLogs();
+                fetchDashboardSummary();
+                fetchChartData();
+            } catch (error) { showToast(error.message, true); }
+        }
+    );
 }
 
+/**
+ * Show a confirmation modal and then reactivate a customer.
+ *
+ * @param {number} customerId - Primary key of the customer.
+ */
 async function reactivateCustomer(customerId) {
-    openConfirmModal("Activate Customer", "Reactivate this customer account?", async () => {
-        try {
-            await handleJsonResponse(await fetch(`/api/customers/${customerId}/reactivate`, { method: "PATCH" }));
-            showMessage("Customer activated successfully.");
-            fetchCustomers(); fetchAuditLogs(); fetchDashboardSummary(); fetchChartData();
-        } catch (error) { showMessage(error.message, true); }
-    });
+    openConfirmModal(
+        "Activate Customer",
+        "Reactivate this customer account?",
+        async () => {
+            try {
+                await handleJsonResponse(
+                    await fetch(
+                        `/api/customers/${customerId}/reactivate`,
+                        { method: "PATCH" }
+                    )
+                );
+                showToast("Customer activated successfully.");
+                fetchCustomers();
+                fetchAuditLogs();
+                fetchDashboardSummary();
+                fetchChartData();
+            } catch (error) { showToast(error.message, true); }
+        }
+    );
 }
 
+/**
+ * Show a confirmation modal and then permanently delete a customer.
+ * On success I clear the detail, transactions, and timeline
+ * panels and reset the edit form fields.
+ *
+ * @param {number} customerId - Primary key of the customer.
+ */
 async function deleteCustomer(customerId) {
-    openConfirmModal("Delete Customer", "Delete this customer record?", async () => {
-        try {
-            await handleJsonResponse(await fetch(`/api/customers/${customerId}`, { method: "DELETE" }));
-            showMessage("Customer deleted successfully.");
-            fetchCustomers(); fetchAuditLogs(); fetchDashboardSummary(); fetchChartData();
+    openConfirmModal(
+        "Delete Customer",
+        "Delete this customer record?",
+        async () => {
+            try {
+                await handleJsonResponse(
+                    await fetch(
+                        `/api/customers/${customerId}`,
+                        { method: "DELETE" }
+                    )
+                );
+                showToast("Customer deleted successfully.");
+                fetchCustomers();
+                fetchAuditLogs();
+                fetchDashboardSummary();
+                fetchChartData();
 
-            if (customerDetailPanel) customerDetailPanel.innerHTML = `<p class="muted-text">Select "View" on a customer to see their stored data.</p>`;
-            if (customerTransactionsPanel) customerTransactionsPanel.innerHTML = `<div class="transaction-item"><p class="muted-text">Select "View" on a customer to load transactions.</p></div>`;
-            if (customerTimelinePanel) customerTimelinePanel.innerHTML = `<div class="transaction-item"><p class="muted-text">Select "View" on a customer to load timeline events.</p></div>`;
+                // Clear the detail panels so stale data is not shown.
+                if (customerDetailPanel) {
+                    customerDetailPanel.innerHTML =
+                        `<p class="muted-text">Select "View" on a customer to see their stored data.</p>`;
+                }
+                if (customerTransactionsPanel) {
+                    customerTransactionsPanel.innerHTML =
+                        `<div class="customer-item"><p class="muted-text">Select "View" on a customer to load transactions.</p></div>`;
+                }
+                if (customerTimelinePanel) {
+                    customerTimelinePanel.innerHTML =
+                        `<div class="customer-item"><p class="muted-text">Select "View" on a customer to load timeline events.</p></div>`;
+                }
 
-            const editId = document.getElementById("edit-customer-id");
-            const editName = document.getElementById("edit-full-name");
-            const editEmail = document.getElementById("edit-email");
-            if (editId) editId.value = "";
-            if (editName) editName.value = "";
-            if (editEmail) editEmail.value = "";
-        } catch (error) { showMessage(error.message, true); }
-    });
+                // Reset the edit form so it does not show a deleted ID.
+                const editId    = document.getElementById("edit-customer-id");
+                const editName  = document.getElementById("edit-full-name");
+                const editEmail = document.getElementById("edit-email");
+                if (editId)    editId.value    = "";
+                if (editName)  editName.value  = "";
+                if (editEmail) editEmail.value = "";
+            } catch (error) { showMessage(error.message, true); }
+        }
+    );
 }
 
 // ---------------------------------------------------------------------------
-// Event listeners — search / pagination
+// Event listeners — search autocomplete and pagination
 // ---------------------------------------------------------------------------
 
-// Set ARIA attributes on search input for autocomplete listbox pattern
+// Set ARIA attributes on the customer search input so screen
+// readers announce the autocomplete listbox pattern correctly.
 if (customerSearchInput) {
     customerSearchInput.setAttribute("aria-autocomplete", "list");
-    customerSearchInput.setAttribute("aria-controls", "customer-suggestions-listbox");
+    customerSearchInput.setAttribute(
+        "aria-controls", "customer-suggestions-listbox"
+    );
     customerSearchInput.setAttribute("aria-expanded", "false");
 }
 
+// Update suggestion list on every keystroke.
 customerSearchInput?.addEventListener("input", updateSuggestions);
 
-// Keyboard navigation: ArrowDown from input enters the suggestions list
+// Keyboard navigation: ArrowDown from the input moves focus
+// into the suggestions list; Escape closes the list.
 customerSearchInput?.addEventListener("keydown", (event) => {
     if (!suggestionsBox || suggestionsBox.classList.contains("hidden")) return;
     if (event.key === "ArrowDown") {
@@ -793,11 +1443,13 @@ customerSearchInput?.addEventListener("keydown", (event) => {
     }
 });
 
-// Keyboard navigation within the suggestions box
+// Keyboard navigation within the suggestion list.
+// ArrowDown/ArrowUp moves between items; ArrowUp on the first
+// item wraps focus back to the search input.
 suggestionsBox?.addEventListener("keydown", (event) => {
-    const items = Array.from(suggestionsBox.querySelectorAll(".suggestion-item"));
+    const items   = Array.from(suggestionsBox.querySelectorAll(".suggestion-item"));
     const focused = document.activeElement;
-    const idx = items.indexOf(focused);
+    const idx     = items.indexOf(focused);
 
     if (event.key === "ArrowDown") {
         event.preventDefault();
@@ -807,25 +1459,32 @@ suggestionsBox?.addEventListener("keydown", (event) => {
         if (idx > 0) {
             items[idx - 1].focus();
         } else {
-            // Wrap back to input
+            // Wrap back to the search input.
             customerSearchInput?.focus();
         }
     } else if (event.key === "Escape") {
         event.preventDefault();
         suggestionsBox.classList.add("hidden");
-        if (customerSearchInput) customerSearchInput.setAttribute("aria-expanded", "false");
+        if (customerSearchInput) {
+            customerSearchInput.setAttribute("aria-expanded", "false");
+        }
         customerSearchInput?.focus();
     }
-    // Enter is already handled by the button's click event
+    // Enter is already handled by each button's own click event.
 });
 
+// Close the suggestion dropdown when the user clicks anywhere
+// outside the search wrapper.
 document.addEventListener("click", (event) => {
     if (!event.target.closest(".search-wrapper")) {
         suggestionsBox?.classList.add("hidden");
-        if (customerSearchInput) customerSearchInput.setAttribute("aria-expanded", "false");
+        if (customerSearchInput) {
+            customerSearchInput.setAttribute("aria-expanded", "false");
+        }
     }
 });
 
+/* Customers pagination buttons */
 document.getElementById("customers-prev-btn")?.addEventListener("click", () => {
     if (customersPage > 0) { customersPage--; fetchCustomers(); }
 });
@@ -833,6 +1492,8 @@ document.getElementById("customers-next-btn")?.addEventListener("click", () => {
     customersPage++;
     fetchCustomers();
 });
+
+/* Transactions pagination buttons */
 document.getElementById("transactions-prev-btn")?.addEventListener("click", () => {
     if (transactionsPage > 0) { transactionsPage--; fetchTransactions(); }
 });
@@ -847,23 +1508,29 @@ document.getElementById("transactions-next-btn")?.addEventListener("click", () =
 customerForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const full_name = document.getElementById("full_name").value.trim();
-    const email = document.getElementById("email").value.trim();
-    const balance = parseInt(document.getElementById("balance").value, 10);
+    const email     = document.getElementById("email").value.trim();
+    const balance   = parseInt(document.getElementById("balance").value, 10);
     if (!full_name || !email || Number.isNaN(balance)) {
         showMessage("Full name, email, and opening balance are required.", true);
         return;
     }
     try {
         setLoading(true);
-        const createdCustomer = await handleJsonResponse(await fetch("/api/customers", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ full_name, email, balance })
-        }));
+        const createdCustomer = await handleJsonResponse(
+            await fetch("/api/customers", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ full_name, email, balance })
+            })
+        );
         customerForm.reset();
+        // Reset balance to 0 after form.reset() clears it.
         document.getElementById("balance").value = 0;
         showMessage(`Customer created. Account: ${createdCustomer.account_number}`);
-        fetchCustomers(true); fetchAuditLogs(); fetchDashboardSummary(); fetchChartData();
+        fetchCustomers(true);
+        fetchAuditLogs();
+        fetchDashboardSummary();
+        fetchChartData();
     } catch (error) { showMessage(error.message, true); }
     finally { setLoading(false); }
 });
@@ -874,19 +1541,30 @@ customerForm?.addEventListener("submit", async (event) => {
 editCustomerForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const customerId = document.getElementById("edit-customer-id").value;
-    const full_name = document.getElementById("edit-full-name").value.trim();
-    const email = document.getElementById("edit-email").value.trim();
-    if (!customerId) { showEditMessage("Select a customer first using the Edit button.", true); return; }
-    if (!full_name || !email) { showEditMessage("Full name and email are required.", true); return; }
+    const full_name  = document.getElementById("edit-full-name").value.trim();
+    const email      = document.getElementById("edit-email").value.trim();
+    if (!customerId) {
+        showEditMessage("Select a customer first using the Edit button.", true);
+        return;
+    }
+    if (!full_name || !email) {
+        showEditMessage("Full name and email are required.", true);
+        return;
+    }
     try {
         setLoading(true);
-        await handleJsonResponse(await fetch(`/api/customers/${customerId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ full_name, email })
-        }));
+        await handleJsonResponse(
+            await fetch(`/api/customers/${customerId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ full_name, email })
+            })
+        );
         showEditMessage("Customer updated successfully.");
-        fetchCustomers(); fetchAuditLogs(); fetchDashboardSummary();
+        fetchCustomers();
+        fetchAuditLogs();
+        fetchDashboardSummary();
+        // Reload the detail panel with fresh data.
         await viewCustomer(customerId);
     } catch (error) { showEditMessage(error.message, true); }
     finally { setLoading(false); }
@@ -898,62 +1576,86 @@ editCustomerForm?.addEventListener("submit", async (event) => {
 depositForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const account_number = document.getElementById("deposit-account").value.trim();
-    const amount = parseInt(document.getElementById("deposit-amount").value, 10);
-    const description = document.getElementById("deposit-description").value.trim();
+    const amount         = parseInt(document.getElementById("deposit-amount").value, 10);
+    const description    = document.getElementById("deposit-description").value.trim();
     try {
         setLoading(true);
-        await handleJsonResponse(await fetch("/api/transactions/deposit", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ account_number, amount, description })
-        }));
+        await handleJsonResponse(
+            await fetch("/api/transactions/deposit", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account_number, amount, description })
+            })
+        );
         depositForm.reset();
-        showMessage("Deposit completed successfully.");
-        fetchCustomers(); fetchTransactions(true); fetchAuditLogs(); fetchDashboardSummary(); fetchChartData();
-    } catch (error) { showMessage(error.message, true); }
+        showToast("Deposit completed successfully.");
+        fetchCustomers();
+        fetchTransactions(true);
+        fetchAuditLogs();
+        fetchDashboardSummary();
+        fetchChartData();
+    } catch (error) { showToast(error.message, true); }
     finally { setLoading(false); }
 });
 
 withdrawForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const account_number = document.getElementById("withdraw-account").value.trim();
-    const amount = parseInt(document.getElementById("withdraw-amount").value, 10);
-    const description = document.getElementById("withdraw-description").value.trim();
+    const amount         = parseInt(document.getElementById("withdraw-amount").value, 10);
+    const description    = document.getElementById("withdraw-description").value.trim();
     try {
         setLoading(true);
-        await handleJsonResponse(await fetch("/api/transactions/withdraw", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ account_number, amount, description })
-        }));
+        await handleJsonResponse(
+            await fetch("/api/transactions/withdraw", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account_number, amount, description })
+            })
+        );
         withdrawForm.reset();
-        showMessage("Withdrawal completed successfully.");
-        fetchCustomers(); fetchTransactions(true); fetchAuditLogs(); fetchDashboardSummary(); fetchChartData();
-    } catch (error) { showMessage(error.message, true); }
+        showToast("Withdrawal completed successfully.");
+        fetchCustomers();
+        fetchTransactions(true);
+        fetchAuditLogs();
+        fetchDashboardSummary();
+        fetchChartData();
+    } catch (error) { showToast(error.message, true); }
     finally { setLoading(false); }
 });
 
 transferForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const from_account_number = document.getElementById("from_account_number").value.trim();
-    const to_account_number = document.getElementById("to_account_number").value.trim();
-    const amount = parseInt(document.getElementById("transfer_amount").value, 10);
-    const description = document.getElementById("transfer_description").value.trim();
+    const to_account_number   = document.getElementById("to_account_number").value.trim();
+    const amount              = parseInt(document.getElementById("transfer_amount").value, 10);
+    const description         = document.getElementById("transfer_description").value.trim();
+    // Show a confirmation modal before submitting a transfer.
     openConfirmModal(
         "Confirm Transfer",
         `Transfer £${amount || 0} from ${from_account_number || "source"} to ${to_account_number || "destination"}?`,
         async () => {
             try {
                 setLoading(true);
-                await handleJsonResponse(await fetch("/api/transactions/transfer", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ from_account_number, to_account_number, amount, description })
-                }));
+                await handleJsonResponse(
+                    await fetch("/api/transactions/transfer", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            from_account_number,
+                            to_account_number,
+                            amount,
+                            description
+                        })
+                    })
+                );
                 transferForm.reset();
-                showMessage("Transfer completed successfully.");
-                fetchCustomers(); fetchTransactions(true); fetchAuditLogs(); fetchDashboardSummary(); fetchChartData();
-            } catch (error) { showMessage(error.message, true); }
+                showToast("Transfer completed successfully.");
+                fetchCustomers();
+                fetchTransactions(true);
+                fetchAuditLogs();
+                fetchDashboardSummary();
+                fetchChartData();
+            } catch (error) { showToast(error.message, true); }
             finally { setLoading(false); }
         }
     );
@@ -968,14 +1670,20 @@ loginForm?.addEventListener("submit", async (event) => {
     const password = document.getElementById("login-password").value;
     try {
         setLoading(true);
-        const data = await handleJsonResponse(await fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password })
-        }));
+        const data = await handleJsonResponse(
+            await fetch("/api/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
+            })
+        );
         window.currentUserRole = data.role || "staff";
         if (data.must_change_password) {
-            showLoginMessage("Login successful. You must change your default password before continuing.");
+            // Redirect to the dashboard with a flag that triggers
+            // the change-password form scroll on arrival.
+            showLoginMessage(
+                "Login successful. You must change your default password before continuing."
+            );
             setTimeout(() => {
                 window.location.href = "/?change_password=1";
             }, 1200);
@@ -994,17 +1702,20 @@ createStaffForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const username = document.getElementById("new-staff-username").value.trim();
     const password = document.getElementById("new-staff-password").value;
-    const role = document.getElementById("new-staff-role").value;
+    const role     = document.getElementById("new-staff-role").value;
     try {
         setLoading(true);
-        await handleJsonResponse(await fetch("/api/staff-users", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password, role })
-        }));
+        await handleJsonResponse(
+            await fetch("/api/staff-users", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password, role })
+            })
+        );
         createStaffForm.reset();
         showCreateStaffMessage(`Staff user "${username}" created successfully.`);
-        fetchStaffUsers(); fetchAuditLogs();
+        fetchStaffUsers();
+        fetchAuditLogs();
     } catch (error) { showCreateStaffMessage(error.message, true); }
     finally { setLoading(false); }
 });
@@ -1014,26 +1725,31 @@ createStaffForm?.addEventListener("submit", async (event) => {
 // ---------------------------------------------------------------------------
 changePasswordForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const userId = document.getElementById("change-password-user-id").value;
+    const userId           = document.getElementById("change-password-user-id").value;
     const current_password = document.getElementById("change-password-current").value;
-    const new_password = document.getElementById("change-password-new").value;
-    const confirm = document.getElementById("change-password-confirm").value;
+    const new_password     = document.getElementById("change-password-new").value;
+    const confirm          = document.getElementById("change-password-confirm").value;
 
+    // Client-side confirmation match check before the API call.
     if (new_password !== confirm) {
         showChangePasswordMessage("New passwords do not match.", true);
         return;
     }
     if (!userId) {
-        showChangePasswordMessage("Unable to determine user ID. Please reload the page.", true);
+        showChangePasswordMessage(
+            "Unable to determine user ID. Please reload the page.", true
+        );
         return;
     }
     try {
         setLoading(true);
-        await handleJsonResponse(await fetch(`/api/staff-users/${userId}/change-password`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ current_password, new_password })
-        }));
+        await handleJsonResponse(
+            await fetch(`/api/staff-users/${userId}/change-password`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ current_password, new_password })
+            })
+        );
         changePasswordForm.reset();
         showChangePasswordMessage("Password changed successfully.");
         fetchAuditLogs();
@@ -1046,30 +1762,41 @@ changePasswordForm?.addEventListener("submit", async (event) => {
 // ---------------------------------------------------------------------------
 logoutBtn?.addEventListener("click", async () => {
     try {
-        await handleJsonResponse(await fetch("/api/auth/logout", { method: "POST" }));
+        await handleJsonResponse(
+            await fetch("/api/auth/logout", { method: "POST" })
+        );
         window.location.href = "/login";
     } catch (error) { showMessage(error.message, true); }
 });
 
-refreshBtn?.addEventListener("click", () => fetchCustomers(true));
-searchCustomersBtn?.addEventListener("click", () => fetchCustomers(true));
+// Refresh / search / filter buttons.
+refreshBtn?.addEventListener("click",             () => fetchCustomers(true));
+searchCustomersBtn?.addEventListener("click",     () => fetchCustomers(true));
 refreshTransactionsBtn?.addEventListener("click", () => fetchTransactions(true));
-filterTransactionsBtn?.addEventListener("click", () => fetchTransactions(true));
-refreshAuditBtn?.addEventListener("click", fetchAuditLogs);
+filterTransactionsBtn?.addEventListener("click",  () => fetchTransactions(true));
+refreshAuditBtn?.addEventListener("click",        fetchAuditLogs);
 
 exportCustomersBtn?.addEventListener("click", async () => {
-    try { await exportFile("/api/export/customers", "customers.csv"); showToast("Customers exported."); }
+    try {
+        await exportFile("/api/export/customers", "customers.csv");
+        showToast("Customers exported.");
+    }
     catch (error) { showMessage(error.message, true); }
 });
 exportTransactionsBtn?.addEventListener("click", async () => {
-    try { await exportFile("/api/export/transactions", "transactions.csv"); showToast("Transactions exported."); }
+    try {
+        await exportFile("/api/export/transactions", "transactions.csv");
+        showToast("Transactions exported.");
+    }
     catch (error) { showMessage(error.message, true); }
 });
 
 // ---------------------------------------------------------------------------
-// Init
+// Initialisation IIFE — runs once on page load
 // ---------------------------------------------------------------------------
 (async () => {
+    // Only fetch auth data on pages that have a list panel
+    // (i.e. the dashboard, not the login page).
     if (customerList || transactionList || auditList) {
         await fetchCurrentUser();
         await fetchCsrfToken();
@@ -1079,14 +1806,19 @@ exportTransactionsBtn?.addEventListener("click", async () => {
         fetchDashboardSummary();
         fetchCustomers();
         fetchChartData();
-        // Auto-refresh dashboard stats every 30 seconds
-        setInterval(() => { fetchDashboardSummary(); fetchChartData(); }, 30000);
+        // Auto-refresh dashboard stats every 30 seconds so the
+        // metric cards stay up to date without a manual reload.
+        setInterval(() => {
+            fetchDashboardSummary();
+            fetchChartData();
+        }, 30000);
     }
     if (transactionList) fetchTransactions();
-    if (auditList) fetchAuditLogs();
-    if (staffUserList) fetchStaffUsers();
+    if (auditList)       fetchAuditLogs();
+    if (staffUserList)   fetchStaffUsers();
 
-    // If redirected here after first login, scroll to and highlight the change-password section
+    // After a first-login redirect (?change_password=1) I scroll
+    // to the change-password form and show a warning toast.
     if (new URLSearchParams(window.location.search).get("change_password") === "1") {
         const cpSection = document.getElementById("change-password-form");
         if (cpSection) {
@@ -1094,17 +1826,132 @@ exportTransactionsBtn?.addEventListener("click", async () => {
             cpSection.querySelector("input")?.focus();
             showToast("Please change your default password to continue.", true);
         }
-        // Clean the URL without reloading
+        // Remove the query parameter without triggering a reload.
         history.replaceState(null, "", window.location.pathname);
     }
 })();
 
 // ---------------------------------------------------------------------------
-// Global exposure for inline onclick handlers
+// Event delegation — customer list (replaces all onclick= handlers)
 // ---------------------------------------------------------------------------
-window.viewCustomer = viewCustomer;
-window.startEditCustomer = startEditCustomer;
-window.deactivateCustomer = deactivateCustomer;
-window.reactivateCustomer = reactivateCustomer;
-window.deleteCustomer = deleteCustomer;
+/**
+ * I use a single delegated listener on the customer list
+ * container so that buttons inside dynamically-rendered rows
+ * work without re-attaching handlers after each render.
+ * This pattern also complies with the CSP (no inline onclick=).
+ */
+customerList?.addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id     = parseInt(btn.dataset.id, 10);
+    if (isNaN(id)) return;
+
+    if (action === "view")       viewCustomer(id);
+    if (action === "edit")       startEditCustomer(id);
+    if (action === "deactivate") deactivateCustomer(id);
+    if (action === "activate")   reactivateCustomer(id);
+    if (action === "delete")     deleteCustomer(id);
+});
+
+/** Delegated listener for the staff user list unlock buttons. */
+staffUserList?.addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id     = parseInt(btn.dataset.id, 10);
+    if (isNaN(id)) return;
+
+    if (action === "unlock-staff") unlockStaffUser(id);
+});
+
+// ---------------------------------------------------------------------------
+// Customer detail panel — live search
+// ---------------------------------------------------------------------------
+
+/** DOM refs for the detail-panel search controls. */
+const detailSearchInput   = document.getElementById("detail-search-input");
+const detailSearchBtn     = document.getElementById("detail-search-btn");
+const detailSearchResults = document.getElementById("detail-search-results");
+
+/**
+ * Search for customers by name / email / account number and
+ * display matching results in the detail search dropdown.
+ * Results are shown as clickable buttons that load the full
+ * detail view via viewCustomer().
+ *
+ * @param {string} query - Text to search for.
+ */
+async function detailSearch(query) {
+    if (!query.trim()) return;
+    try {
+        const params   = new URLSearchParams({ search: query.trim(), limit: 8 });
+        const response = await fetch(`/api/customers?${params}`);
+        const customers = await handleJsonResponse(response);
+
+        if (!customers.length) {
+            detailSearchResults.innerHTML =
+                `<div class="suggestion-item" style="color:var(--muted);cursor:default;">No customers found</div>`;
+            detailSearchResults.classList.remove("hidden");
+            return;
+        }
+
+        detailSearchResults.innerHTML = customers.map((c) => `
+            <button type="button" class="suggestion-item" data-action="detail-pick" data-id="${c.id}">
+                <strong>${escapeHtml(c.full_name)}</strong>
+                <span style="color:var(--muted);font-size:12px;margin-left:8px;">${escapeHtml(c.account_number)}</span>
+                <span class="status-pill ${c.is_active ? "status-active" : "status-inactive"}" style="margin-left:6px;">${c.is_active ? "Active" : "Inactive"}</span>
+            </button>
+        `).join("");
+        detailSearchResults.classList.remove("hidden");
+    } catch (error) {
+        showToast(error.message, true);
+    }
+}
+
+/** Trigger a search when the Find button is clicked. */
+detailSearchBtn?.addEventListener("click", () => {
+    detailSearch(detailSearchInput?.value || "");
+});
+
+/** Trigger search on Enter, close results on Escape. */
+detailSearchInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        detailSearch(detailSearchInput.value);
+    }
+    if (e.key === "Escape") {
+        detailSearchResults?.classList.add("hidden");
+    }
+});
+
+/** Auto-search after 2+ characters are typed. */
+detailSearchInput?.addEventListener("input", () => {
+    const q = detailSearchInput.value.trim();
+    if (q.length >= 2) detailSearch(q);
+    else detailSearchResults?.classList.add("hidden");
+});
+
+/** Delegated listener: clicking a search result opens the detail view. */
+detailSearchResults?.addEventListener("click", async (event) => {
+    const btn = event.target.closest("button[data-action='detail-pick']");
+    if (!btn) return;
+    const id = parseInt(btn.dataset.id, 10);
+    if (!isNaN(id)) {
+        detailSearchResults.classList.add("hidden");
+        detailSearchInput.value = "";
+        await viewCustomer(id);
+    }
+});
+
+// Close the detail search dropdown when clicking outside the
+// customer-view-section search form group.
+document.addEventListener("click", (event) => {
+    if (!event.target.closest("#customer-view-section .form-group")) {
+        detailSearchResults?.classList.add("hidden");
+    }
+});
+
+// Expose unlockStaffUser on window for any legacy callers.
+// Event delegation is the primary mechanism — this is a fallback.
 window.unlockStaffUser = unlockStaffUser;

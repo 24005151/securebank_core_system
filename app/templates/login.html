@@ -1,26 +1,44 @@
+{# login.html — staff login page.
+   Extends base.html and adds 'login-page' to <body> so the CSS
+   hides the sidebar and topbar and shows the full-screen
+   gradient layout instead.
+#}
 {% extends "base.html" %}
 
 {% block title %}Staff Login - SecureBank Core System{% endblock %}
 {% block page_title %}Staff Login{% endblock %}
+
+{# 'login-page' class triggers the full-screen gradient layout
+   and hides the sidebar and topbar via CSS rules in style.css. #}
 {% block body_class %}login-page{% endblock %}
 
 {% block content %}
+
+{# Branded header — displayed above the card grid on the login page #}
 <div class="login-brand">
     <div class="login-brand-mark">SB</div>
     <h1>SecureBank</h1>
     <p>Secure staff access portal</p>
 </div>
 
+{# Two-column grid: login form on the left, role info on the right #}
 <div class="dashboard-grid">
+
+    {# --- Login form card --- #}
     <div class="panel-card">
         <div class="panel-header">
             <h3>Sign in to your account</h3>
             <span class="panel-badge">Staff Only</span>
         </div>
 
+        {# aria-label provides a descriptive name for the form
+           as a whole, used by assistive technologies. #}
         <form id="login-form" aria-label="Staff login form">
+
             <div class="form-group">
                 <label for="login-username">Username</label>
+                {# autocomplete="username" allows password managers
+                   to auto-fill saved credentials. #}
                 <input type="text" id="login-username" required
                        autocomplete="username"
                        aria-required="true"
@@ -37,9 +55,13 @@
             <button type="submit" class="primary-btn full-width-btn">Sign in</button>
         </form>
 
-        <p id="login-message" class="status-message" role="alert" aria-live="assertive"></p>
+        {# Inline status message — announced by aria-live="assertive"
+           so screen readers read it immediately on login failure. #}
+        <p id="login-message" class="status-message"
+           role="alert" aria-live="assertive"></p>
     </div>
 
+    {# --- Role access information card --- #}
     <div class="login-info-card">
         <div class="panel-card">
             <div class="panel-header">
@@ -48,6 +70,8 @@
             </div>
 
             <div class="activity-list">
+
+                {# Manager role description #}
                 <div class="activity-item">
                     <div class="activity-dot" style="background:#3b82f6"></div>
                     <div class="activity-body">
@@ -55,6 +79,8 @@
                         <div class="activity-sub">Full access: customers, transactions, audit logs, staff management</div>
                     </div>
                 </div>
+
+                {# Staff role description #}
                 <div class="activity-item">
                     <div class="activity-dot" style="background:#7c3aed"></div>
                     <div class="activity-body">
@@ -62,6 +88,8 @@
                         <div class="activity-sub">View and process transactions; read-only audit access</div>
                     </div>
                 </div>
+
+                {# Privacy notice — briefly explains data handling #}
                 <div class="activity-item">
                     <div class="activity-dot" style="background:#64748b"></div>
                     <div class="activity-body">
@@ -69,8 +97,10 @@
                         <div class="activity-sub">This system stores limited customer data for assignment purposes. Access is role-restricted and fully audited.</div>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>
-</div>
+
+</div>{# /dashboard-grid #}
 {% endblock %}

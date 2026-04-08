@@ -1,3 +1,21 @@
+"""
+SecureBank — database operations (CRUD layer).
+
+I keep all direct database interactions in this module so the
+route handlers stay thin and easy to test.  Every function
+that changes data also writes an audit log entry.
+
+Key constants:
+    LOW_BALANCE_THRESHOLD             — pence below which a
+        customer is counted as "low balance" on the dashboard.
+    SUSPICIOUS_TRANSACTION_THRESHOLD  — pence at or above which
+        a transaction is automatically risk-flagged.
+    MAX_FAILED_LOGIN_ATTEMPTS         — consecutive failures
+        before an account is locked.
+    SEARCH_MAX_LENGTH                 — maximum characters
+        accepted in a search term to limit query cost.
+"""
+
 import csv
 import io
 import random
@@ -10,7 +28,12 @@ from passlib.context import CryptContext
 
 from app import models, schemas
 
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+# I use pbkdf2_sha256 as the hashing scheme.  passlib will
+# automatically re-hash on verify if a stronger scheme is
+# configured in future (deprecated="auto").
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"], deprecated="auto"
+)
 
 LOW_BALANCE_THRESHOLD = 250
 SUSPICIOUS_TRANSACTION_THRESHOLD = 1000
@@ -19,28 +42,60 @@ SEARCH_MAX_LENGTH = 100
 
 
 def _now():
+    """Return the current UTC datetime as a timezone-aware value."""
     return datetime.now(timezone.utc)
 
 
+# ---------------------------------------------------------------------------
+# Password helpers
+# ---------------------------------------------------------------------------
+
 def hash_password(password: str) -> str:
+    """Return the pbkdf2_sha256 hash of ``password``."""
     return pwd_context.hash(password)
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+def verify_password(
+    plain_password: str, hashed_password: str
+) -> bool:
+    """Return True if ``plain_password`` matches the stored hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def validate_password_strength(password: str) -> tuple[bool, str | None]:
+def validate_password_strength(
+    password: str,
+) -> tuple[bool, str | None]:
+    """Check that ``password`` meets the strength requirements.
+
+    I require at least 8 characters with at least one uppercase
+    letter, one lowercase letter, and one digit.
+
+    Returns:
+        A (True, None) tuple on success, or (False, message)
+        describing the first failing rule.
+    """
     if len(password) < 8:
-        return False, "Password must be at least 8 characters long."
+        return False, (
+            "Password must be at least 8 characters long."
+        )
     if not re.search(r"[A-Z]", password):
-        return False, "Password must include at least one uppercase letter."
+        return False, (
+            "Password must include at least one uppercase letter."
+        )
     if not re.search(r"[a-z]", password):
-        return False, "Password must include at least one lowercase letter."
+        return False, (
+            "Password must include at least one lowercase letter."
+        )
     if not re.search(r"[0-9]", password):
-        return False, "Password must include at least one number."
+        return False, (
+            "Password must include at least one number."
+        )
     return True, None
 
+
+# ---------------------------------------------------------------------------
+# Audit logging
+# ---------------------------------------------------------------------------
 
 def create_audit_log(
     db: Session,
@@ -50,6 +105,22 @@ def create_audit_log(
     result: str = "success",
     ip_address: str | None = None
 ):
+    """Write an immutable audit log entry to the database.
+
+    I call this function at the end of every mutating operation
+    so there is always a complete trail of who did what and when.
+
+    Args:
+        db:         Active database session.
+        event_type: Short machine-readable name, e.g. 'deposit'.
+        actor:      Username of the staff member, or 'system'.
+        details:    Human-readable description of the event.
+        result:     'success' or 'failure'.
+        ip_address: Peer IP from the HTTP request, or None.
+
+    Returns:
+        The newly created AuditLog ORM object.
+    """
     log = models.AuditLog(
         event_type=event_type,
         actor=actor,
@@ -63,11 +134,26 @@ def create_audit_log(
     return log
 
 
+# ---------------------------------------------------------------------------
+# Staff user seeding
+# ---------------------------------------------------------------------------
+
 def seed_default_staff_user(db: Session):
+    """Create the four demo staff accounts on first startup.
+
+    I only insert each account when it does not already exist,
+    so this function is safe to call on every application boot.
+
+    Demo accounts:
+        admin    — manager,    must change password on first login
+        staff1   — staff,      must change password on first login
+        admin2   — manager,    no forced password change
+        sysadmin — superadmin, must change password on first login
+    """
+    # --- admin (manager) ---
     existing_admin = db.query(models.StaffUser).filter(
         models.StaffUser.username == "admin"
     ).first()
-
     if not existing_admin:
         admin = models.StaffUser(
             username="admin",
@@ -78,10 +164,10 @@ def seed_default_staff_user(db: Session):
         db.add(admin)
         db.commit()
 
+    # --- staff1 (staff) ---
     existing_staff = db.query(models.StaffUser).filter(
         models.StaffUser.username == "staff1"
     ).first()
-
     if not existing_staff:
         staff = models.StaffUser(
             username="staff1",
@@ -92,10 +178,10 @@ def seed_default_staff_user(db: Session):
         db.add(staff)
         db.commit()
 
+    # --- admin2 (manager, no forced reset) ---
     existing_admin2 = db.query(models.StaffUser).filter(
         models.StaffUser.username == "admin2"
     ).first()
-
     if not existing_admin2:
         admin2 = models.StaffUser(
             username="admin2",
@@ -106,10 +192,10 @@ def seed_default_staff_user(db: Session):
         db.add(admin2)
         db.commit()
 
+    # --- sysadmin (superadmin) ---
     existing_sysadmin = db.query(models.StaffUser).filter(
         models.StaffUser.username == "sysadmin"
     ).first()
-
     if not existing_sysadmin:
         sysadmin = models.StaffUser(
             username="sysadmin",
@@ -121,8 +207,17 @@ def seed_default_staff_user(db: Session):
         db.commit()
 
 
+# ---------------------------------------------------------------------------
+# Staff user management
+# ---------------------------------------------------------------------------
+
 def get_all_staff_users(db: Session):
-    return db.query(models.StaffUser).order_by(models.StaffUser.id.asc()).all()
+    """Return all staff users ordered by ID ascending."""
+    return (
+        db.query(models.StaffUser)
+        .order_by(models.StaffUser.id.asc())
+        .all()
+    )
 
 
 def unlock_staff_user(
@@ -132,13 +227,35 @@ def unlock_staff_user(
     actor_role: str = "staff",
     ip_address: str | None = None
 ):
-    user = db.query(models.StaffUser).filter(models.StaffUser.id == user_id).first()
+    """Unlock a staff account that has been locked by failed logins.
+
+    I enforce a role hierarchy rule: manager and superadmin
+    accounts may only be unlocked by a superadmin.  Regular
+    staff accounts can be unlocked by any manager or superadmin.
+
+    Args:
+        db:          Active database session.
+        user_id:     ID of the account to unlock.
+        actor:       Username of the person performing the unlock.
+        actor_role:  Role of the person performing the unlock.
+        ip_address:  Peer IP for the audit log.
+
+    Returns:
+        (user, None) on success, or (None, error_message).
+    """
+    user = db.query(models.StaffUser).filter(
+        models.StaffUser.id == user_id
+    ).first()
     if not user:
         return None, "User not found."
 
-    # Privileged accounts (manager/superadmin) can only be unlocked by a superadmin
-    if user.role in ("manager", "superadmin") and actor_role != "superadmin":
-        return None, "Only a superadmin can unlock manager or superadmin accounts."
+    # Privileged accounts can only be unlocked by a superadmin.
+    if (user.role in ("manager", "superadmin")
+            and actor_role != "superadmin"):
+        return None, (
+            "Only a superadmin can unlock "
+            "manager or superadmin accounts."
+        )
 
     user.is_locked = False
     user.failed_login_attempts = 0
@@ -162,6 +279,17 @@ def create_staff_user(
     actor: str,
     ip_address: str | None = None
 ):
+    """Create a new staff user account.
+
+    I validate password strength before hashing.  All new
+    accounts are created with ``must_change_password=True``
+    so the user is prompted to set their own password on first
+    login.
+
+    Returns:
+        (user, None) on success, or (None, error_message).
+    """
+    # Check for duplicate usernames before doing any work.
     existing = db.query(models.StaffUser).filter(
         models.StaffUser.username == payload.username.strip()
     ).first()
@@ -186,7 +314,10 @@ def create_staff_user(
         db,
         "staff_create",
         actor,
-        f"Created staff user {user.username} with role {user.role}",
+        (
+            f"Created staff user {user.username} "
+            f"with role {user.role}"
+        ),
         ip_address=ip_address
     )
     return user, None
@@ -199,7 +330,19 @@ def change_staff_password(
     actor: str,
     ip_address: str | None = None
 ):
-    user = db.query(models.StaffUser).filter(models.StaffUser.id == user_id).first()
+    """Change a staff user's password.
+
+    I verify the current password, enforce strength rules, and
+    require the new password to differ from the current one.
+    On success I clear the ``must_change_password`` flag so
+    the user is no longer redirected to the change form.
+
+    Returns:
+        (user, None) on success, or (None, error_message).
+    """
+    user = db.query(models.StaffUser).filter(
+        models.StaffUser.id == user_id
+    ).first()
     if not user:
         return None, "User not found."
 
@@ -214,6 +357,8 @@ def change_staff_password(
         return None, "New password must differ from current password."
 
     user.password = hash_password(payload.new_password)
+    # Clear the forced-change flag now the user has set their own
+    # password.
     user.must_change_password = False
     db.commit()
     db.refresh(user)
@@ -228,30 +373,103 @@ def change_staff_password(
     return user, None
 
 
+# ---------------------------------------------------------------------------
+# Customer helpers
+# ---------------------------------------------------------------------------
+
 def generate_unique_account_number(db: Session) -> str:
+    """Generate a unique SB-prefixed account number.
+
+    I loop until I find a number that does not already exist in
+    the database.  The 8-digit random component gives 90 million
+    possible values so collisions are extremely rare in practice.
+    """
     while True:
         account_number = f"SB{random.randint(10000000, 99999999)}"
-        existing = get_customer_by_account_number(db, account_number)
+        existing = get_customer_by_account_number(
+            db, account_number
+        )
         if not existing:
             return account_number
 
 
 def seed_demo_customers_bulk(db: Session):
-    existing_count = db.query(func.count(models.Customer.id)).scalar() or 0
+    """Populate the database with demo customers and transactions.
+
+    I only run when the customers table is completely empty.
+    This gives a realistic starting dataset for demonstration
+    and development without requiring manual data entry.
+    Ten customers are created, eight of whom receive demo
+    transactions that adjust their balances accordingly.
+    """
+    existing_count = (
+        db.query(func.count(models.Customer.id)).scalar() or 0
+    )
     if existing_count > 0:
+        # Database already has customer data — skip seeding.
         return
 
     demo_customers = [
-        {"full_name": "Alice Johnson", "email": "alice.johnson@example.com", "balance": 2500, "is_active": True},
-        {"full_name": "Michael Smith", "email": "michael.smith@example.com", "balance": 1800, "is_active": True},
-        {"full_name": "Sarah Williams", "email": "sarah.williams@example.com", "balance": 3200, "is_active": True},
-        {"full_name": "Daniel Brown", "email": "daniel.brown@example.com", "balance": 900, "is_active": False},
-        {"full_name": "Emma Taylor", "email": "emma.taylor@example.com", "balance": 4100, "is_active": True},
-        {"full_name": "James Wilson", "email": "james.wilson@example.com", "balance": 1500, "is_active": True},
-        {"full_name": "Olivia Thomas", "email": "olivia.thomas@example.com", "balance": 2750, "is_active": True},
-        {"full_name": "Benjamin White", "email": "benjamin.white@example.com", "balance": 600, "is_active": False},
-        {"full_name": "Sophia Harris", "email": "sophia.harris@example.com", "balance": 5200, "is_active": True},
-        {"full_name": "William Martin", "email": "william.martin@example.com", "balance": 1100, "is_active": True},
+        {
+            "full_name": "Alice Johnson",
+            "email": "alice.johnson@example.com",
+            "balance": 2500,
+            "is_active": True
+        },
+        {
+            "full_name": "Michael Smith",
+            "email": "michael.smith@example.com",
+            "balance": 1800,
+            "is_active": True
+        },
+        {
+            "full_name": "Sarah Williams",
+            "email": "sarah.williams@example.com",
+            "balance": 3200,
+            "is_active": True
+        },
+        {
+            "full_name": "Daniel Brown",
+            "email": "daniel.brown@example.com",
+            "balance": 900,
+            "is_active": False
+        },
+        {
+            "full_name": "Emma Taylor",
+            "email": "emma.taylor@example.com",
+            "balance": 4100,
+            "is_active": True
+        },
+        {
+            "full_name": "James Wilson",
+            "email": "james.wilson@example.com",
+            "balance": 1500,
+            "is_active": True
+        },
+        {
+            "full_name": "Olivia Thomas",
+            "email": "olivia.thomas@example.com",
+            "balance": 2750,
+            "is_active": True
+        },
+        {
+            "full_name": "Benjamin White",
+            "email": "benjamin.white@example.com",
+            "balance": 600,
+            "is_active": False
+        },
+        {
+            "full_name": "Sophia Harris",
+            "email": "sophia.harris@example.com",
+            "balance": 5200,
+            "is_active": True
+        },
+        {
+            "full_name": "William Martin",
+            "email": "william.martin@example.com",
+            "balance": 1100,
+            "is_active": True
+        },
     ]
 
     created_customers = []
@@ -269,6 +487,8 @@ def seed_demo_customers_bulk(db: Session):
         db.refresh(customer)
         created_customers.append(customer)
 
+    # Only add demo transactions if we have enough customers to
+    # populate meaningful from/to relationships.
     if len(created_customers) >= 8:
         demo_transactions = [
             models.Transaction(
@@ -290,6 +510,7 @@ def seed_demo_customers_bulk(db: Session):
                 from_customer_id=created_customers[2].id,
                 to_customer_id=created_customers[3].id
             ),
+            # risk_flag=True because amount >= 1 000
             models.Transaction(
                 transaction_type="deposit",
                 amount=1250,
@@ -312,6 +533,7 @@ def seed_demo_customers_bulk(db: Session):
             ),
         ]
 
+        # Apply balance changes to match the demo transactions.
         created_customers[0].balance += 500
         created_customers[1].balance -= 150
         created_customers[2].balance -= 200
@@ -332,16 +554,37 @@ def seed_demo_customers_bulk(db: Session):
     )
 
 
-def authenticate_staff_user(db: Session, username: str, password: str):
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+
+def authenticate_staff_user(
+    db: Session, username: str, password: str
+):
+    """Verify login credentials and return the staff user.
+
+    I increment the failed-attempt counter on every wrong
+    password and lock the account when the threshold is reached.
+
+    I return the same generic error message for "user not found"
+    and "account locked" to prevent username enumeration — an
+    attacker should not be able to confirm whether a username
+    exists by observing the error message.
+
+    Returns:
+        (user, None) on success, or (None, error_message).
+    """
     user = db.query(models.StaffUser).filter(
         models.StaffUser.username == username.strip()
     ).first()
 
     if not user:
+        # User does not exist — return generic message.
         return None, "Invalid username or password."
 
     if user.is_locked:
-        # Return generic message to prevent confirming that the username exists
+        # Return the same message as invalid credentials to
+        # avoid revealing that the username is valid but locked.
         return None, "Invalid username or password."
 
     if not verify_password(password, user.password):
@@ -349,12 +592,13 @@ def authenticate_staff_user(db: Session, username: str, password: str):
         user.last_failed_login_at = _now()
 
         if user.failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
+            # Lock the account after too many failures.
             user.is_locked = True
 
         db.commit()
-
         return None, "Invalid username or password."
 
+    # Successful login — reset the failure counters.
     user.failed_login_attempts = 0
     user.is_locked = False
     user.last_failed_login_at = None
@@ -363,24 +607,51 @@ def authenticate_staff_user(db: Session, username: str, password: str):
     return user, None
 
 
+# ---------------------------------------------------------------------------
+# Dashboard statistics
+# ---------------------------------------------------------------------------
+
 def get_dashboard_summary(db: Session):
-    total_customers = db.query(func.count(models.Customer.id)).scalar() or 0
-    active_customers = db.query(func.count(models.Customer.id)).filter(
-        models.Customer.is_active.is_(True)
-    ).scalar() or 0
-    inactive_customers = db.query(func.count(models.Customer.id)).filter(
-        models.Customer.is_active.is_(False)
-    ).scalar() or 0
-    total_transactions = db.query(func.count(models.Transaction.id)).scalar() or 0
-    total_balance = db.query(
-        func.coalesce(func.sum(models.Customer.balance), 0)
-    ).scalar() or 0
-    suspicious_transactions = db.query(func.count(models.Transaction.id)).filter(
-        models.Transaction.risk_flag.is_(True)
-    ).scalar() or 0
-    low_balance_customers = db.query(func.count(models.Customer.id)).filter(
-        models.Customer.balance < LOW_BALANCE_THRESHOLD
-    ).scalar() or 0
+    """Return aggregate statistics for the dashboard metric cards.
+
+    I run all seven counts in a single database round-trip
+    (separate scalar queries) and return them as a dict that
+    maps directly to the DashboardSummaryResponse schema.
+    """
+    total_customers = (
+        db.query(func.count(models.Customer.id)).scalar() or 0
+    )
+    active_customers = (
+        db.query(func.count(models.Customer.id))
+        .filter(models.Customer.is_active.is_(True))
+        .scalar() or 0
+    )
+    inactive_customers = (
+        db.query(func.count(models.Customer.id))
+        .filter(models.Customer.is_active.is_(False))
+        .scalar() or 0
+    )
+    total_transactions = (
+        db.query(func.count(models.Transaction.id)).scalar() or 0
+    )
+    # coalesce avoids NULL when no customers exist yet.
+    total_balance = (
+        db.query(
+            func.coalesce(func.sum(models.Customer.balance), 0)
+        ).scalar() or 0
+    )
+    suspicious_transactions = (
+        db.query(func.count(models.Transaction.id))
+        .filter(models.Transaction.risk_flag.is_(True))
+        .scalar() or 0
+    )
+    low_balance_customers = (
+        db.query(func.count(models.Customer.id))
+        .filter(
+            models.Customer.balance < LOW_BALANCE_THRESHOLD
+        )
+        .scalar() or 0
+    )
 
     return {
         "total_customers": total_customers,
@@ -394,25 +665,44 @@ def get_dashboard_summary(db: Session):
 
 
 def get_chart_data(db: Session):
+    """Return count data for the two dashboard charts.
+
+    Returns a dict with:
+        customer_status   — active and inactive customer counts.
+        transaction_types — counts for deposit, withdraw, transfer.
+    """
     customer_status = {
-        "active": db.query(func.count(models.Customer.id)).filter(
-            models.Customer.is_active.is_(True)
-        ).scalar() or 0,
-        "inactive": db.query(func.count(models.Customer.id)).filter(
-            models.Customer.is_active.is_(False)
-        ).scalar() or 0,
+        "active": (
+            db.query(func.count(models.Customer.id))
+            .filter(models.Customer.is_active.is_(True))
+            .scalar() or 0
+        ),
+        "inactive": (
+            db.query(func.count(models.Customer.id))
+            .filter(models.Customer.is_active.is_(False))
+            .scalar() or 0
+        ),
     }
 
     transaction_types = {
-        "deposit": db.query(func.count(models.Transaction.id)).filter(
-            models.Transaction.transaction_type == "deposit"
-        ).scalar() or 0,
-        "withdraw": db.query(func.count(models.Transaction.id)).filter(
-            models.Transaction.transaction_type == "withdraw"
-        ).scalar() or 0,
-        "transfer": db.query(func.count(models.Transaction.id)).filter(
-            models.Transaction.transaction_type == "transfer"
-        ).scalar() or 0,
+        "deposit": (
+            db.query(func.count(models.Transaction.id))
+            .filter(
+                models.Transaction.transaction_type == "deposit"
+            ).scalar() or 0
+        ),
+        "withdraw": (
+            db.query(func.count(models.Transaction.id))
+            .filter(
+                models.Transaction.transaction_type == "withdraw"
+            ).scalar() or 0
+        ),
+        "transfer": (
+            db.query(func.count(models.Transaction.id))
+            .filter(
+                models.Transaction.transaction_type == "transfer"
+            ).scalar() or 0
+        ),
     }
 
     return {
@@ -420,6 +710,10 @@ def get_chart_data(db: Session):
         "transaction_types": transaction_types
     }
 
+
+# ---------------------------------------------------------------------------
+# Customer queries
+# ---------------------------------------------------------------------------
 
 def get_all_customers(
     db: Session,
@@ -429,9 +723,24 @@ def get_all_customers(
     limit: int = 50,
     offset: int = 0
 ):
+    """Return a paginated, optionally filtered list of customers.
+
+    Args:
+        db:      Active database session.
+        search:  Optional search term matched against full_name,
+                 email, and account_number (case-insensitive).
+                 Truncated to SEARCH_MAX_LENGTH characters to
+                 prevent excessively expensive LIKE queries.
+        status:  'active', 'inactive', or None for all.
+        sort_by: 'balance_desc', 'balance_asc', 'name_asc', or
+                 None (defaults to newest first by ID).
+        limit:   Maximum number of records to return.
+        offset:  Number of records to skip for pagination.
+    """
     query = db.query(models.Customer)
 
     if search:
+        # Truncate to avoid LIKE queries on very long strings.
         term = search.strip()[:SEARCH_MAX_LENGTH]
         value = f"%{term}%"
         query = query.filter(
@@ -443,9 +752,13 @@ def get_all_customers(
         )
 
     if status == "active":
-        query = query.filter(models.Customer.is_active.is_(True))
+        query = query.filter(
+            models.Customer.is_active.is_(True)
+        )
     elif status == "inactive":
-        query = query.filter(models.Customer.is_active.is_(False))
+        query = query.filter(
+            models.Customer.is_active.is_(False)
+        )
 
     if sort_by == "balance_desc":
         query = query.order_by(models.Customer.balance.desc())
@@ -454,28 +767,38 @@ def get_all_customers(
     elif sort_by == "name_asc":
         query = query.order_by(models.Customer.full_name.asc())
     else:
+        # Default: newest records first.
         query = query.order_by(models.Customer.id.desc())
 
     return query.offset(offset).limit(limit).all()
 
 
 def get_customer_by_email(db: Session, email: str):
+    """Return the customer with the given email, or None."""
     return db.query(models.Customer).filter(
         models.Customer.email == email
     ).first()
 
 
-def get_customer_by_account_number(db: Session, account_number: str):
+def get_customer_by_account_number(
+    db: Session, account_number: str
+):
+    """Return the customer with the given account number, or None."""
     return db.query(models.Customer).filter(
         models.Customer.account_number == account_number
     ).first()
 
 
 def get_customer_by_id(db: Session, customer_id: int):
+    """Return the customer with the given primary key, or None."""
     return db.query(models.Customer).filter(
         models.Customer.id == customer_id
     ).first()
 
+
+# ---------------------------------------------------------------------------
+# Customer mutations
+# ---------------------------------------------------------------------------
 
 def create_customer(
     db: Session,
@@ -483,6 +806,15 @@ def create_customer(
     actor: str,
     ip_address: str | None = None
 ):
+    """Create a new customer record and write an audit log.
+
+    I normalise the email to lowercase and strip whitespace from
+    both name and email before saving.  The account number is
+    generated by ``generate_unique_account_number``.
+
+    Returns:
+        The newly created Customer ORM object.
+    """
     db_customer = models.Customer(
         full_name=customer.full_name.strip(),
         email=customer.email.strip().lower(),
@@ -498,7 +830,10 @@ def create_customer(
         db,
         "customer_create",
         actor,
-        f"Created customer {db_customer.full_name} ({db_customer.account_number})",
+        (
+            f"Created customer {db_customer.full_name} "
+            f"({db_customer.account_number})"
+        ),
         ip_address=ip_address
     )
     return db_customer
@@ -511,14 +846,30 @@ def update_customer(
     actor: str,
     ip_address: str | None = None
 ):
+    """Update a customer's name and email address.
+
+    I check for email uniqueness before saving so that the error
+    is surfaced before any data is changed.  The old name and
+    email are captured and included in the audit log so there is
+    a full history of what changed.
+
+    Returns:
+        (customer, None) on success, or (None, error_message).
+    """
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return None, "Customer not found."
 
-    existing_email = get_customer_by_email(db, payload.email.strip().lower())
+    # Check the new email is not already used by a different
+    # customer (an existing customer updating to their own
+    # current email is fine).
+    existing_email = get_customer_by_email(
+        db, payload.email.strip().lower()
+    )
     if existing_email and existing_email.id != customer.id:
         return None, "Email already exists."
 
+    # Capture old values before overwriting for the audit log.
     old_name = customer.full_name
     old_email = customer.email
 
@@ -549,6 +900,14 @@ def deactivate_customer(
     actor: str,
     ip_address: str | None = None
 ):
+    """Set a customer account to inactive.
+
+    Inactive accounts cannot send or receive money.  I guard
+    against double-deactivation to keep the audit log clean.
+
+    Returns:
+        (customer, None) on success, or (None, error_message).
+    """
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return None, "Customer not found."
@@ -565,7 +924,10 @@ def deactivate_customer(
         db,
         "customer_deactivate",
         actor,
-        f"Deactivated customer {customer.full_name} ({customer.account_number})",
+        (
+            f"Deactivated customer {customer.full_name} "
+            f"({customer.account_number})"
+        ),
         ip_address=ip_address
     )
     return customer, None
@@ -577,6 +939,11 @@ def reactivate_customer(
     actor: str,
     ip_address: str | None = None
 ):
+    """Restore a previously deactivated customer account.
+
+    Returns:
+        (customer, None) on success, or (None, error_message).
+    """
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return None, "Customer not found."
@@ -593,7 +960,10 @@ def reactivate_customer(
         db,
         "customer_reactivate",
         actor,
-        f"Reactivated customer {customer.full_name} ({customer.account_number})",
+        (
+            f"Reactivated customer {customer.full_name} "
+            f"({customer.account_number})"
+        ),
         ip_address=ip_address
     )
     return customer, None
@@ -605,10 +975,20 @@ def delete_customer(
     actor: str,
     ip_address: str | None = None
 ):
+    """Permanently delete a customer record from the database.
+
+    I capture the name and account number before deletion so
+    they can be included in the audit log entry (the ORM object
+    is gone after ``db.delete``).
+
+    Returns:
+        (True, None) on success, or (False, error_message).
+    """
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return False, "Customer not found."
 
+    # Capture before deleting — the object becomes detached.
     account_number = customer.account_number
     full_name = customer.full_name
 
@@ -625,6 +1005,10 @@ def delete_customer(
     return True, None
 
 
+# ---------------------------------------------------------------------------
+# Transaction queries
+# ---------------------------------------------------------------------------
+
 def get_all_transactions(
     db: Session,
     account_number: str | None = None,
@@ -632,6 +1016,21 @@ def get_all_transactions(
     limit: int = 50,
     offset: int = 0
 ):
+    """Return a paginated list of transactions with optional filters.
+
+    Args:
+        db:               Active database session.
+        account_number:   If provided, return only transactions
+                          where the customer with this account
+                          is either the sender or receiver.
+        transaction_type: Optional filter: 'deposit', 'withdraw',
+                          or 'transfer'.
+        limit:            Maximum number of records to return.
+        offset:           Records to skip for pagination.
+
+    Returns:
+        List of Transaction ORM objects, newest first.
+    """
     query = db.query(models.Transaction)
 
     if transaction_type:
@@ -640,8 +1039,12 @@ def get_all_transactions(
         )
 
     if account_number:
-        customer = get_customer_by_account_number(db, account_number.strip())
+        customer = get_customer_by_account_number(
+            db, account_number.strip()
+        )
         if not customer:
+            # Unknown account number — return empty list rather
+            # than an error so the UI can show "no results".
             return []
         query = query.filter(
             or_(
@@ -650,7 +1053,12 @@ def get_all_transactions(
             )
         )
 
-    return query.order_by(models.Transaction.id.desc()).offset(offset).limit(limit).all()
+    return (
+        query.order_by(models.Transaction.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
 
 def get_all_audit_logs(
@@ -661,19 +1069,48 @@ def get_all_audit_logs(
     limit: int = 100,
     offset: int = 0
 ):
+    """Return a paginated, filtered list of audit log entries.
+
+    All filters are optional and can be combined.  ``actor`` is
+    matched with a case-insensitive LIKE so partial usernames
+    work.  ``event_type`` and ``result`` are exact matches.
+    """
     query = db.query(models.AuditLog)
 
     if actor:
-        query = query.filter(models.AuditLog.actor.ilike(f"%{actor.strip()[:SEARCH_MAX_LENGTH]}%"))
+        safe_actor = actor.strip()[:SEARCH_MAX_LENGTH]
+        query = query.filter(
+            models.AuditLog.actor.ilike(f"%{safe_actor}%")
+        )
     if event_type:
-        query = query.filter(models.AuditLog.event_type == event_type)
+        query = query.filter(
+            models.AuditLog.event_type == event_type
+        )
     if result:
-        query = query.filter(models.AuditLog.result == result)
+        query = query.filter(
+            models.AuditLog.result == result
+        )
 
-    return query.order_by(models.AuditLog.id.desc()).offset(offset).limit(limit).all()
+    return (
+        query.order_by(models.AuditLog.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
 
 def get_customer_timeline(db: Session, customer_id: int):
+    """Build a chronological activity timeline for a customer.
+
+    I combine the customer's creation event with all of their
+    transactions (up to 200) and sort the result newest-first.
+    The timeline is used in the customer detail panel in the UI.
+
+    Returns:
+        List of dicts with 'event_type', 'description', and
+        'created_at' keys, sorted newest first.  Empty list if
+        the customer does not exist.
+    """
     customer = get_customer_by_id(db, customer_id)
     if not customer:
         return []
@@ -681,26 +1118,39 @@ def get_customer_timeline(db: Session, customer_id: int):
     items = [
         {
             "event_type": "customer_created",
-            "description": f"Customer record created for {customer.full_name}",
+            "description": (
+                f"Customer record created for {customer.full_name}"
+            ),
             "created_at": customer.created_at
         }
     ]
 
-    for transaction in get_all_transactions(db, account_number=customer.account_number, limit=200):
+    for transaction in get_all_transactions(
+        db,
+        account_number=customer.account_number,
+        limit=200
+    ):
         items.append(
             {
                 "event_type": transaction.transaction_type,
                 "description": (
-                    f"{transaction.transaction_type.title()} of £{transaction.amount} "
+                    f"{transaction.transaction_type.title()} "
+                    f"of £{transaction.amount} "
                     f"({transaction.description or 'No description'})"
                 ),
                 "created_at": transaction.created_at
             }
         )
 
+    # Sort newest first so the most recent events appear at the
+    # top of the timeline panel in the UI.
     items.sort(key=lambda x: x["created_at"], reverse=True)
     return items
 
+
+# ---------------------------------------------------------------------------
+# Financial transactions
+# ---------------------------------------------------------------------------
 
 def deposit_money(
     db: Session,
@@ -708,7 +1158,18 @@ def deposit_money(
     actor: str,
     ip_address: str | None = None
 ):
-    customer = get_customer_by_account_number(db, request.account_number.strip())
+    """Credit an amount to a customer's account.
+
+    I automatically set ``risk_flag=True`` when the amount meets
+    or exceeds ``SUSPICIOUS_TRANSACTION_THRESHOLD``.  The flag
+    appears in the audit log detail as a visual warning.
+
+    Returns:
+        (transaction, None) on success, or (None, error_message).
+    """
+    customer = get_customer_by_account_number(
+        db, request.account_number.strip()
+    )
     if not customer:
         return None, "Customer account not found."
 
@@ -731,11 +1192,16 @@ def deposit_money(
     db.commit()
     db.refresh(transaction)
 
-    details = f"Deposited £{request.amount} into {customer.account_number}"
+    details = (
+        f"Deposited £{request.amount} "
+        f"into {customer.account_number}"
+    )
     if risk_flag:
         details += " [flagged as large transaction]"
 
-    create_audit_log(db, "deposit", actor, details, ip_address=ip_address)
+    create_audit_log(
+        db, "deposit", actor, details, ip_address=ip_address
+    )
     return transaction, None
 
 
@@ -745,7 +1211,17 @@ def withdraw_money(
     actor: str,
     ip_address: str | None = None
 ):
-    customer = get_customer_by_account_number(db, request.account_number.strip())
+    """Debit an amount from a customer's account.
+
+    I check for sufficient funds before proceeding so the
+    balance can never go negative.
+
+    Returns:
+        (transaction, None) on success, or (None, error_message).
+    """
+    customer = get_customer_by_account_number(
+        db, request.account_number.strip()
+    )
     if not customer:
         return None, "Customer account not found."
 
@@ -771,11 +1247,16 @@ def withdraw_money(
     db.commit()
     db.refresh(transaction)
 
-    details = f"Withdrew £{request.amount} from {customer.account_number}"
+    details = (
+        f"Withdrew £{request.amount} "
+        f"from {customer.account_number}"
+    )
     if risk_flag:
         details += " [flagged as large transaction]"
 
-    create_audit_log(db, "withdraw", actor, details, ip_address=ip_address)
+    create_audit_log(
+        db, "withdraw", actor, details, ip_address=ip_address
+    )
     return transaction, None
 
 
@@ -785,8 +1266,26 @@ def transfer_money(
     actor: str,
     ip_address: str | None = None
 ):
-    from_customer = get_customer_by_account_number(db, request.from_account_number.strip())
-    to_customer = get_customer_by_account_number(db, request.to_account_number.strip())
+    """Move funds from one customer account to another.
+
+    I validate both accounts, check sufficient funds, and then
+    update both balances and create a single transaction record
+    in one commit so the operation is effectively atomic.
+
+    Note: SQLite does not support ``SELECT FOR UPDATE`` row
+    locking, so two simultaneous withdrawals from the same
+    account could both succeed (race condition).  Use PostgreSQL
+    with ``SELECT FOR UPDATE`` in a production deployment.
+
+    Returns:
+        (transaction, None) on success, or (None, error_message).
+    """
+    from_customer = get_customer_by_account_number(
+        db, request.from_account_number.strip()
+    )
+    to_customer = get_customer_by_account_number(
+        db, request.to_account_number.strip()
+    )
 
     if not from_customer:
         return None, "Source account not found."
@@ -801,14 +1300,17 @@ def transfer_money(
     if from_customer.balance < request.amount:
         return None, "Insufficient funds."
 
-    # Both balance changes and transaction record committed atomically
+    # Timestamp both balance changes to the same instant so
+    # "last updated" is consistent for both accounts.
     now = _now()
     from_customer.balance -= request.amount
     to_customer.balance += request.amount
     from_customer.updated_at = now
     to_customer.updated_at = now
 
-    risk_flag = request.amount >= SUSPICIOUS_TRANSACTION_THRESHOLD
+    risk_flag = (
+        request.amount >= SUSPICIOUS_TRANSACTION_THRESHOLD
+    )
 
     transaction = models.Transaction(
         transaction_type="transfer",
@@ -824,16 +1326,36 @@ def transfer_money(
 
     details = (
         f"Transferred £{request.amount} from "
-        f"{from_customer.account_number} to {to_customer.account_number}"
+        f"{from_customer.account_number} "
+        f"to {to_customer.account_number}"
     )
     if risk_flag:
         details += " [flagged as large transaction]"
 
-    create_audit_log(db, "transfer", actor, details, ip_address=ip_address)
+    create_audit_log(
+        db, "transfer", actor, details, ip_address=ip_address
+    )
     return transaction, None
 
 
-def export_customers_csv(db: Session, actor: str, ip_address: str | None = None) -> str:
+# ---------------------------------------------------------------------------
+# CSV export
+# ---------------------------------------------------------------------------
+
+def export_customers_csv(
+    db: Session,
+    actor: str,
+    ip_address: str | None = None
+) -> str:
+    """Return all customer records serialised as a CSV string.
+
+    I fetch up to 10 000 records and write an audit log entry
+    so that every export is traceable.  The CSV uses the Python
+    ``csv`` module to handle quoting and escaping automatically.
+
+    Returns:
+        CSV text as a string (no BOM, Unix line endings).
+    """
     customers = get_all_customers(db, limit=10000)
     output = io.StringIO()
     writer = csv.writer(output)
@@ -844,7 +1366,8 @@ def export_customers_csv(db: Session, actor: str, ip_address: str | None = None)
     for customer in customers:
         writer.writerow([
             customer.id, customer.full_name, customer.email,
-            customer.account_number, customer.balance, customer.is_active,
+            customer.account_number, customer.balance,
+            customer.is_active,
             customer.created_at, customer.updated_at
         ])
     create_audit_log(
@@ -855,19 +1378,35 @@ def export_customers_csv(db: Session, actor: str, ip_address: str | None = None)
     return output.getvalue()
 
 
-def export_transactions_csv(db: Session, actor: str, ip_address: str | None = None) -> str:
+def export_transactions_csv(
+    db: Session,
+    actor: str,
+    ip_address: str | None = None
+) -> str:
+    """Return all transaction records serialised as a CSV string.
+
+    I fetch up to 10 000 records and write an audit log entry.
+
+    Returns:
+        CSV text as a string.
+    """
     transactions = get_all_transactions(db, limit=10000)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
         "id", "transaction_type", "amount", "description",
-        "risk_flag", "from_customer_id", "to_customer_id", "created_at"
+        "risk_flag", "from_customer_id",
+        "to_customer_id", "created_at"
     ])
     for transaction in transactions:
         writer.writerow([
-            transaction.id, transaction.transaction_type, transaction.amount,
-            transaction.description, transaction.risk_flag,
-            transaction.from_customer_id, transaction.to_customer_id,
+            transaction.id,
+            transaction.transaction_type,
+            transaction.amount,
+            transaction.description,
+            transaction.risk_flag,
+            transaction.from_customer_id,
+            transaction.to_customer_id,
             transaction.created_at
         ])
     create_audit_log(
@@ -878,21 +1417,49 @@ def export_transactions_csv(db: Session, actor: str, ip_address: str | None = No
     return output.getvalue()
 
 
+# ---------------------------------------------------------------------------
+# Audit log maintenance
+# ---------------------------------------------------------------------------
+
 def purge_audit_logs(
     db: Session,
     days: int,
     actor: str,
     ip_address: str | None = None
 ) -> int:
+    """Delete audit log entries older than ``days`` days.
+
+    I perform a bulk delete rather than loading objects into
+    memory, using ``synchronize_session=False`` to skip the
+    SQLAlchemy in-memory session sync (safe here because we
+    commit immediately and do not use the deleted objects).
+
+    After deletion I write a new audit entry recording how many
+    records were purged and who requested it.
+
+    Args:
+        db:         Active database session.
+        days:       Delete entries older than this many days.
+        actor:      Username of the staff member requesting purge.
+        ip_address: Peer IP for the audit log.
+
+    Returns:
+        Number of deleted rows.
+    """
     from datetime import timedelta
     cutoff = _now() - timedelta(days=days)
-    deleted = db.query(models.AuditLog).filter(
-        models.AuditLog.created_at < cutoff
-    ).delete(synchronize_session=False)
+    deleted = (
+        db.query(models.AuditLog)
+        .filter(models.AuditLog.created_at < cutoff)
+        .delete(synchronize_session=False)
+    )
     db.commit()
     create_audit_log(
         db, "audit_log_purge", actor,
-        f"Purged {deleted} audit log entries older than {days} days",
+        (
+            f"Purged {deleted} audit log entries "
+            f"older than {days} days"
+        ),
         ip_address=ip_address
     )
     return deleted

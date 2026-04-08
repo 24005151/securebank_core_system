@@ -219,8 +219,16 @@
             <h3>Customer Detail</h3>
             <span class="panel-badge">View</span>
         </div>
+        <div class="form-group" style="margin-bottom:14px;position:relative;">
+            <label for="detail-search-input">Find customer by name, email or account number</label>
+            <div style="display:flex;gap:8px;">
+                <input type="text" id="detail-search-input" placeholder="e.g. Alice Johnson or SB12345678" autocomplete="off" style="flex:1;">
+                <button type="button" id="detail-search-btn" class="primary-btn">Find</button>
+            </div>
+            <div id="detail-search-results" class="suggestions-box hidden" style="top:100%;"></div>
+        </div>
         <div id="customer-detail-panel">
-            <p class="muted-text">Select "View" on a customer to see their stored data.</p>
+            <p class="muted-text" style="padding:8px 0;">Select "View" on a customer from the list, or search above.</p>
         </div>
     </div>
 

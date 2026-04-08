@@ -1,3 +1,39 @@
+/*
+ * style.css — SecureBank Core System stylesheet.
+ *
+ * I organise this file into labelled sections:
+ *   1. Reset & custom properties (CSS variables)
+ *   2. Base / body
+ *   3. Skip navigation (accessibility)
+ *   4. Layout shell (sidebar + main)
+ *   5. Sidebar — brand, nav links, user card
+ *   6. Topbar
+ *   7. Content area
+ *   8. Hero panel
+ *   9. Metric cards (dashboard stats)
+ *  10. Panel cards (generic content containers)
+ *  11. Forms and inputs
+ *  12. Buttons
+ *  13. Customer rows
+ *  14. Transaction rows
+ *  15. Audit log rows
+ *  16. Staff user rows
+ *  17. Timeline rows
+ *  18. Status pills and chips
+ *  19. Search suggestions dropdown
+ *  20. Confirm modal
+ *  21. Toast notifications
+ *  22. Loading overlay
+ *  23. Charts
+ *  24. Login page layout
+ *  25. Dark mode overrides
+ *  26. Reduced-motion overrides
+ *  27. Print styles
+ */
+
+/* ---------------------------------------------------------------------------
+   1. Reset & custom properties
+--------------------------------------------------------------------------- */
 * {
     box-sizing: border-box;
 }
@@ -848,8 +884,27 @@ button:disabled {
 .table-card {
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    overflow: hidden;
+    overflow: visible;
     background: white;
+}
+
+.table-card > .customer-row:first-child,
+.table-card > .transaction-row:first-child,
+.table-card > .audit-row:first-child,
+.table-card > .staff-row:first-child,
+.table-card > .timeline-row:first-child,
+.table-card > .customer-item:first-child {
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.table-card > .customer-row:last-child,
+.table-card > .transaction-row:last-child,
+.table-card > .audit-row:last-child,
+.table-card > .staff-row:last-child,
+.table-card > .timeline-row:last-child,
+.table-card > .customer-item:last-child {
+    border-radius: 0 0 var(--radius) var(--radius);
+    border-bottom: none;
 }
 
 /* ── Customer rows ── */
