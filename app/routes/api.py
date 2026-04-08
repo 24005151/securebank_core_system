@@ -87,7 +87,7 @@ def health_check():
     return {
         "status": "ok",
         "application": "SecureBank Core System",
-        "version": "5.0",
+        "version": "7.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "security_features": [
             "CSRF double-submit token protection",
