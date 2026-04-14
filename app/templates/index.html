@@ -180,6 +180,19 @@
     </div>
 </section>
 
+{# Recent transactions feed — last 10 across all accounts #}
+<section class="wide-panel">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Recent Transactions</h3>
+            <span class="panel-badge">Last 10</span>
+        </div>
+        <div id="recent-transactions-panel" class="table-card">
+            <div class="customer-item"><p class="muted-text">Loading recent transactions…</p></div>
+        </div>
+    </div>
+</section>
+
 <section id="customers-section" class="wide-panel">
     <div class="panel-card">
         <div class="panel-header">
@@ -269,6 +282,19 @@
         </form>
 
         <p id="edit-message" class="status-message"></p>
+    </div>
+</section>
+
+{# Balance history chart — rendered when a customer is selected #}
+<section class="wide-panel" id="balance-history-section" style="display:none;">
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Balance History</h3>
+            <span class="panel-badge">Chart</span>
+        </div>
+        <div style="padding:16px;">
+            <canvas id="balanceHistoryChart" height="100"></canvas>
+        </div>
     </div>
 </section>
 
@@ -414,7 +440,10 @@
                 <option value="success">Success</option>
                 <option value="failure">Failure</option>
             </select>
+            <input type="date" id="audit-date-from" aria-label="From date" title="From date">
+            <input type="date" id="audit-date-to"   aria-label="To date"   title="To date">
             <button id="refresh-audit-btn" type="button" class="primary-btn">Apply</button>
+            <button id="clear-audit-btn"  type="button" class="ghost-btn">Clear</button>
         </div>
 
         <div id="audit-list" class="table-card"></div>

@@ -1158,6 +1158,36 @@ button:disabled {
 .staff-row:last-child { border-bottom: none; }
 .staff-row:hover { background: #fafbff; }
 
+/* Locked accounts rise to the top of the list and are
+   visually distinct with a red left border and tinted bg. */
+.staff-row.locked {
+    border-left: 3px solid var(--danger);
+    background: var(--danger-light);
+    padding-left: 13px; /* compensate for extra border width */
+}
+.staff-row.locked:hover { background: #fee2e2; }
+
+/* Wrapper for avatar + lock overlay icon */
+.staff-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+}
+
+.staff-avatar-lock {
+    position: absolute;
+    bottom: -2px;
+    right: -4px;
+    background: var(--danger);
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--card);
+}
+
 .staff-avatar {
     width: 38px;
     height: 38px;
@@ -1640,6 +1670,8 @@ body.dark-mode .transaction-row:hover,
 body.dark-mode .audit-row:hover,
 body.dark-mode .staff-row:hover { background: #253348; }
 body.dark-mode .customer-row.inactive { background: #1a2335; border-left-color: #475569; }
+body.dark-mode .staff-row.locked { background: rgba(220,38,38,0.12); }
+body.dark-mode .staff-row.locked:hover { background: rgba(220,38,38,0.2); }
 body.dark-mode .modal-card { background: #1e293b; color: var(--text); }
 body.dark-mode .ghost-btn { background: #1e293b; color: var(--text); border-color: #475569; }
 body.dark-mode .ghost-btn:hover { background: #253348; opacity: 1; }

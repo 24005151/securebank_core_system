@@ -122,6 +122,8 @@ const suggestionsBox       = document.getElementById("customer-search-suggestion
 const auditActorFilter  = document.getElementById("audit-actor-filter");
 const auditEventFilter  = document.getElementById("audit-event-filter");
 const auditResultFilter = document.getElementById("audit-result-filter");
+const auditDateFrom     = document.getElementById("audit-date-from");
+const auditDateTo       = document.getElementById("audit-date-to");
 
 /* --- Confirm modal elements --- */
 const confirmModal  = document.getElementById("confirm-modal");
@@ -156,8 +158,9 @@ let confirmAction = null;
 let cachedCustomers = [];
 
 /** Chart.js instances — destroyed and recreated on each refresh. */
-let customerChart    = null;
-let transactionChart = null;
+let customerChart       = null;
+let transactionChart    = null;
+let balanceHistoryChart = null;
 
 /** Number of records per page for all paginated lists. */
 const PAGE_SIZE = 50;
@@ -492,6 +495,86 @@ function renderCharts(data) {
     }
 }
 
+/**
+ * Compute and render a balance-over-time line chart for a customer.
+ *
+ * I derive historical balances by starting from the customer's
+ * current balance and working backwards through their transactions
+ * (oldest first after reversing the newest-first API order).
+ * Each step reconstructs what the balance was before that transaction.
+ *
+ * @param {Object} customer     - CustomerResponse object.
+ * @param {Array}  transactions - TransactionResponse array, newest first.
+ */
+function renderBalanceHistory(customer, transactions) {
+    if (typeof Chart === "undefined") return;
+    const canvas  = document.getElementById("balanceHistoryChart");
+    const section = document.getElementById("balance-history-section");
+    if (!canvas || !section) return;
+
+    if (!transactions.length) {
+        section.style.display = "none";
+        return;
+    }
+
+    // Build balance series working backwards from current balance.
+    const chronological = [...transactions].reverse(); // oldest first
+    let balance = customer.balance;
+    const points = [];
+
+    // Walk backwards to derive balance before each transaction.
+    for (let i = chronological.length - 1; i >= 0; i--) {
+        const t = chronological[i];
+        const isOut = t.transaction_type === "withdraw"
+            || (t.transaction_type === "transfer"
+                && t.from_customer_id === customer.id);
+        const isIn  = t.transaction_type === "deposit"
+            || (t.transaction_type === "transfer"
+                && t.to_customer_id === customer.id);
+        points.unshift({
+            x: new Date(t.created_at).toLocaleDateString([], { day: "numeric", month: "short" }),
+            y: balance / 100  // convert pence to pounds
+        });
+        // Undo the transaction to get the balance before it.
+        if (isOut) balance += t.amount;
+        if (isIn)  balance -= t.amount;
+    }
+    // Add opening point (balance before all transactions).
+    points.unshift({
+        x: new Date(customer.created_at).toLocaleDateString([], { day: "numeric", month: "short" }) + " (open)",
+        y: balance / 100
+    });
+
+    if (balanceHistoryChart) balanceHistoryChart.destroy();
+    balanceHistoryChart = new Chart(canvas, {
+        type: "line",
+        data: {
+            labels: points.map(p => p.x),
+            datasets: [{
+                label: `${customer.full_name} — Balance (£)`,
+                data: points.map(p => p.y),
+                borderColor: "#2563eb",
+                backgroundColor: "rgba(37,99,235,0.08)",
+                tension: 0.3,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    ticks: { callback: v => `£${v.toLocaleString()}` },
+                    beginAtZero: false
+                }
+            }
+        }
+    });
+    section.style.display = "";
+}
+
 /** Fetch dashboard summary stats and update metric cards. */
 async function fetchDashboardSummary() {
     try {
@@ -508,6 +591,45 @@ async function fetchChartData() {
         const data     = await handleJsonResponse(response);
         renderCharts(data);
     } catch (error) { showMessage(error.message, true); }
+}
+
+/**
+ * Fetch the 10 most recent transactions across all accounts
+ * and render them in the dashboard feed panel.
+ */
+async function fetchRecentTransactions() {
+    const panel = document.getElementById("recent-transactions-panel");
+    if (!panel) return;
+    try {
+        const txns = await handleJsonResponse(
+            await fetch("/api/transactions?limit=10")
+        );
+        if (!txns.length) {
+            panel.innerHTML = `<div class="customer-item"><p class="muted-text">No transactions recorded yet.</p></div>`;
+            return;
+        }
+        panel.innerHTML = txns.map((t) => {
+            const typeColour = t.transaction_type === "deposit"
+                ? "var(--success)"
+                : t.transaction_type === "withdraw"
+                    ? "var(--warning)"
+                    : "var(--info)";
+            const sign = t.transaction_type === "deposit" ? "+" : "-";
+            return `
+            <div class="transaction-row">
+                <div class="txn-type-dot" style="background:${typeColour};" aria-hidden="true"></div>
+                <div class="txn-body">
+                    <div class="txn-type">${escapeHtml(t.transaction_type)}</div>
+                    <div class="txn-desc">${escapeHtml(t.description || "—")}</div>
+                </div>
+                <div class="txn-right">
+                    <div class="txn-amount" style="color:${typeColour};">${sign}£${(t.amount).toLocaleString()}</div>
+                    <div class="txn-date">${escapeHtml(formatDateTime(t.created_at))}</div>
+                    ${t.risk_flag ? `<span class="status-pill status-risk" title="Risk flagged">⚠ Risk</span>` : ""}
+                </div>
+            </div>`;
+        }).join("");
+    } catch (error) { panel.innerHTML = `<div class="customer-item"><p class="muted-text">${escapeHtml(error.message)}</p></div>`; }
 }
 
 // ---------------------------------------------------------------------------
@@ -803,6 +925,7 @@ function renderCustomerDetail(customer, transactions = []) {
             ${mgr && customer.is_active  ? `<button type="button" class="danger-btn"  data-action="deactivate" data-id="${customer.id}">Deactivate Account</button>` : ""}
             ${mgr && !customer.is_active ? `<button type="button" class="success-btn" data-action="activate"   data-id="${customer.id}">Activate Account</button>` : ""}
             ${mgr ? `<button type="button" class="ghost-btn" data-action="edit" data-id="${customer.id}">Edit Details</button>` : ""}
+            ${mgr ? `<button type="button" class="ghost-btn" data-action="export-csv" data-id="${customer.id}">Export CSV</button>` : ""}
             ${mgr ? `<button type="button" class="danger-btn" data-action="delete" data-id="${customer.id}">Delete Customer</button>` : ""}
         </div>
     `;
@@ -814,11 +937,35 @@ function renderCustomerDetail(customer, transactions = []) {
         btn.addEventListener("click", () => {
             const action = btn.dataset.action;
             const id     = parseInt(btn.dataset.id, 10);
-            if (action === "deactivate") deactivateCustomer(id);
-            if (action === "activate")   reactivateCustomer(id);
-            if (action === "edit")       startEditCustomer(id);
-            if (action === "delete")     deleteCustomer(id);
+            if (action === "deactivate")  deactivateCustomer(id);
+            if (action === "activate")    reactivateCustomer(id);
+            if (action === "edit")        startEditCustomer(id);
+            if (action === "delete")      deleteCustomer(id);
+            if (action === "export-csv")  exportCustomerTransactions(id, customer.full_name);
         });
+    });
+}
+
+/**
+ * Trigger a CSV download of all transactions for a single customer.
+ *
+ * Uses a direct navigation to the export endpoint so the browser
+ * handles the file-download prompt without requiring a Blob/URL
+ * workaround.  The endpoint requires manager+ auth which is already
+ * enforced server-side; the session cookie is sent automatically.
+ *
+ * @param {number} customerId  - The customer's numeric ID.
+ * @param {string} fullName    - Used to build a readable filename.
+ */
+function exportCustomerTransactions(customerId, fullName) {
+    const safe = fullName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    exportFile(
+        `/api/export/customers/${customerId}/transactions`,
+        `${safe}_transactions.csv`
+    ).then(() => {
+        showToast(`Exported transactions for ${fullName}.`);
+    }).catch(() => {
+        showToast("Export failed — check your permissions.", "error");
     });
 }
 
@@ -1054,6 +1201,10 @@ async function fetchAuditLogs() {
         params.append("event_type", auditEventFilter.value.trim());
     if (auditResultFilter?.value)
         params.append("result",     auditResultFilter.value);
+    if (auditDateFrom?.value)
+        params.append("date_from",  auditDateFrom.value);
+    if (auditDateTo?.value)
+        params.append("date_to",    auditDateTo.value);
 
     const url = params.toString()
         ? `/api/audit-logs?${params.toString()}`
@@ -1135,7 +1286,11 @@ function renderStaffUsers(users) {
             `<div class="customer-item"><p class="muted-text">No staff users found.</p></div>`;
         return;
     }
-    staffUserList.innerHTML = users.map((user) => {
+    // Sort locked accounts to the top so they are immediately visible.
+    const sortedUsers = [...users].sort(
+        (a, b) => (b.is_locked ? 1 : 0) - (a.is_locked ? 1 : 0)
+    );
+    staffUserList.innerHTML = sortedUsers.map((user) => {
         const targetIsPrivileged = ["manager", "superadmin"].includes(user.role);
         // This manager CAN unlock: target is staff, or actor is superadmin.
         const canUnlock = user.is_locked && (isSuperadmin() || !targetIsPrivileged);
@@ -1144,9 +1299,22 @@ function renderStaffUsers(users) {
         const unlockBlockedMsg = user.is_locked && targetIsPrivileged && !isSuperadmin()
             ? `<span class="warning-inline" title="Only superadmin can unlock this account">Locked — superadmin required</span>`
             : "";
+        // Small lock-icon badge overlaid on the avatar for locked accounts.
+        const lockOverlay = user.is_locked ? `
+            <div class="staff-avatar-lock" aria-hidden="true">
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none"
+                     stroke="white" stroke-width="3"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+            </div>` : "";
         return `
-        <div class="staff-row">
-            <div class="staff-avatar" aria-hidden="true">${escapeHtml(user.username.slice(0, 2).toUpperCase())}</div>
+        <div class="staff-row${user.is_locked ? " locked" : ""}">
+            <div class="staff-avatar-wrap">
+                <div class="staff-avatar" aria-hidden="true">${escapeHtml(user.username.slice(0, 2).toUpperCase())}</div>
+                ${lockOverlay}
+            </div>
             <div class="staff-info">
                 <div class="staff-name">${escapeHtml(user.username)}</div>
                 <div class="staff-sub">
@@ -1261,6 +1429,10 @@ async function viewCustomer(customerId) {
         // bug here does not block the transactions panel below.
         try { renderCustomerDetail(customer, transactions); }
         catch (e) { console.error("Detail render error:", e); }
+
+        // Render the balance history chart.
+        try { renderBalanceHistory(customer, transactions); }
+        catch (e) { console.error("Balance chart error:", e); }
 
         // Always render transactions independently.
         renderTransactions(
@@ -1799,6 +1971,14 @@ searchCustomersBtn?.addEventListener("click",     () => fetchCustomers(true));
 refreshTransactionsBtn?.addEventListener("click", () => fetchTransactions(true));
 filterTransactionsBtn?.addEventListener("click",  () => fetchTransactions(true));
 refreshAuditBtn?.addEventListener("click",        fetchAuditLogs);
+document.getElementById("clear-audit-btn")?.addEventListener("click", () => {
+    if (auditActorFilter)  auditActorFilter.value  = "";
+    if (auditEventFilter)  auditEventFilter.value  = "";
+    if (auditResultFilter) auditResultFilter.value = "";
+    if (auditDateFrom)     auditDateFrom.value      = "";
+    if (auditDateTo)       auditDateTo.value        = "";
+    fetchAuditLogs();
+});
 
 exportCustomersBtn?.addEventListener("click", async () => {
     try {
@@ -1830,11 +2010,13 @@ exportTransactionsBtn?.addEventListener("click", async () => {
         fetchDashboardSummary();
         fetchCustomers();
         fetchChartData();
+        fetchRecentTransactions();
         // Auto-refresh dashboard stats every 30 seconds so the
         // metric cards stay up to date without a manual reload.
         setInterval(() => {
             fetchDashboardSummary();
             fetchChartData();
+            fetchRecentTransactions();
         }, 30000);
     }
     if (transactionList) fetchTransactions();
@@ -1979,6 +2161,97 @@ document.addEventListener("click", (event) => {
 // Expose unlockStaffUser on window for any legacy callers.
 // Event delegation is the primary mechanism — this is a fallback.
 window.unlockStaffUser = unlockStaffUser;
+
+// ---------------------------------------------------------------------------
+// Session timeout warning
+// ---------------------------------------------------------------------------
+
+/**
+ * I watch for user activity and warn at 18 minutes of inactivity
+ * (2 minutes before the 20-minute server-side session expiry).
+ * "Stay logged in" pings the CSRF token endpoint to reset the
+ * server session timer, then resets the client timer too.
+ */
+(function initSessionTimeout() {
+    const SESSION_MS  = 20 * 60 * 1000; // 20 minutes — matches server
+    const WARN_MS     = 18 * 60 * 1000; // show modal at 18 minutes
+    const WARN_PERIOD = SESSION_MS - WARN_MS; // 2-minute countdown
+
+    const sessionModal    = document.getElementById("session-modal");
+    const countdownEl     = document.getElementById("session-countdown");
+    const stayBtn         = document.getElementById("session-stay-btn");
+    const sessionLogoutBtn = document.getElementById("session-logout-btn");
+
+    // Only run on authenticated pages (modal element present + user logged in).
+    if (!sessionModal || !document.getElementById("logout-btn")) return;
+
+    let idleTimer      = null;
+    let countdownTimer = null;
+    let warnStart      = null;
+
+    /** Format remaining seconds as M:SS. */
+    function fmtCountdown(ms) {
+        const s   = Math.max(0, Math.ceil(ms / 1000));
+        const min = Math.floor(s / 60);
+        const sec = String(s % 60).padStart(2, "0");
+        return `${min}:${sec}`;
+    }
+
+    /** Show the warning modal and start the countdown tick. */
+    function showWarning() {
+        warnStart = Date.now();
+        sessionModal.classList.remove("hidden");
+        stayBtn?.focus();
+        countdownTimer = setInterval(() => {
+            const remaining = WARN_PERIOD - (Date.now() - warnStart);
+            if (countdownEl) countdownEl.textContent = fmtCountdown(remaining);
+            if (remaining <= 0) {
+                clearInterval(countdownTimer);
+                // Auto-logout when countdown hits zero.
+                ORIGINAL_FETCH("/api/auth/logout", { method: "POST" })
+                    .finally(() => { window.location.href = "/login"; });
+            }
+        }, 500);
+    }
+
+    /** Hide the modal and cancel the countdown tick. */
+    function dismissWarning() {
+        sessionModal.classList.add("hidden");
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+        warnStart      = null;
+    }
+
+    /** Reset the idle timer on any user activity. */
+    function resetIdle() {
+        if (countdownTimer) return; // already in warning state — don't reset
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(showWarning, WARN_MS);
+    }
+
+    // "Stay logged in" — ping the server to refresh the session.
+    stayBtn?.addEventListener("click", () => {
+        dismissWarning();
+        ORIGINAL_FETCH("/api/auth/csrf-token")
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data?.csrf_token) csrfToken = data.csrf_token; });
+        resetIdle();
+    });
+
+    // "Log out now" — immediate logout.
+    sessionLogoutBtn?.addEventListener("click", () => {
+        dismissWarning();
+        ORIGINAL_FETCH("/api/auth/logout", { method: "POST" })
+            .finally(() => { window.location.href = "/login"; });
+    });
+
+    // Track mouse, keyboard, touch, and scroll as signs of activity.
+    ["mousemove", "keydown", "pointerdown", "scroll", "touchstart"]
+        .forEach(evt => document.addEventListener(evt, resetIdle, { passive: true }));
+
+    // Kick off the initial timer.
+    resetIdle();
+})();
 
 // ---------------------------------------------------------------------------
 // Last-login timestamp formatting

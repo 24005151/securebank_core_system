@@ -443,6 +443,8 @@ def read_audit_logs(
     actor: str | None = Query(default=None),
     event_type: str | None = Query(default=None),
     result: str | None = Query(default=None),
+    date_from: str | None = Query(default=None),
+    date_to: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db)
@@ -450,14 +452,17 @@ def read_audit_logs(
     """Return a filtered, paginated list of audit log entries.
 
     Restricted to manager and superadmin accounts only.
-    Staff-role sessions receive a 403 and the UI shows a
-    "manager access required" message instead.
+    ``date_from`` and ``date_to`` accept ISO date strings
+    (YYYY-MM-DD).  ``date_to`` is treated as end-of-day so
+    all events on that date are included.
     """
     return crud.get_all_audit_logs(
         db,
         actor=actor,
         event_type=event_type,
         result=result,
+        date_from=date_from,
+        date_to=date_to,
         limit=limit,
         offset=offset
     )
@@ -671,6 +676,39 @@ def export_transactions(
         headers={
             "Content-Disposition":
                 'attachment; filename="transactions.csv"'
+        }
+    )
+
+
+@router.get("/api/export/customers/{customer_id}/transactions")
+def export_customer_transactions(
+    customer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth=Depends(require_manager_or_api_key)
+):
+    """Export transactions for a single customer as a CSV file.
+
+    Returns 404 if the customer does not exist.  The download is
+    logged in the audit trail so every export is traceable.
+    """
+    actor = (
+        auth["user"]["username"]
+        if auth["user"] else "api_key_client"
+    )
+    csv_text = crud.export_customer_transactions_csv(
+        db, customer_id=customer_id,
+        actor=actor, ip_address=get_client_ip(request)
+    )
+    if csv_text is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return PlainTextResponse(
+        csv_text,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="customer_{customer_id}_transactions.csv"'
         }
     )
 

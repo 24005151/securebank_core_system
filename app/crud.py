@@ -1073,6 +1073,8 @@ def get_all_audit_logs(
     actor: str | None = None,
     event_type: str | None = None,
     result: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     limit: int = 100,
     offset: int = 0
 ):
@@ -1097,6 +1099,25 @@ def get_all_audit_logs(
         query = query.filter(
             models.AuditLog.result == result
         )
+    if date_from:
+        try:
+            from_dt = datetime.fromisoformat(date_from)
+            query = query.filter(
+                models.AuditLog.created_at >= from_dt
+            )
+        except ValueError:
+            pass  # ignore malformed date strings
+    if date_to:
+        try:
+            # Treat the date_to value as end-of-day so that
+            # entering "2026-04-14" includes all events that day.
+            to_dt = datetime.fromisoformat(date_to)
+            to_dt = to_dt.replace(hour=23, minute=59, second=59)
+            query = query.filter(
+                models.AuditLog.created_at <= to_dt
+            )
+        except ValueError:
+            pass
 
     return (
         query.order_by(models.AuditLog.id.desc())
@@ -1419,6 +1440,63 @@ def export_transactions_csv(
     create_audit_log(
         db, "export_transactions", actor,
         f"Exported {len(transactions)} transaction records as CSV",
+        ip_address=ip_address
+    )
+    return output.getvalue()
+
+
+def export_customer_transactions_csv(
+    db: Session,
+    customer_id: int,
+    actor: str,
+    ip_address: str | None = None
+) -> str | None:
+    """Return transaction records for one customer serialised as CSV.
+
+    Fetches all transactions where the customer is either the sender
+    or receiver, writes an audit log entry, and returns the CSV text.
+    Returns ``None`` if the customer does not exist.
+
+    Returns:
+        CSV text as a string, or None if customer not found.
+    """
+    customer = get_customer(db, customer_id)
+    if customer is None:
+        return None
+
+    transactions = (
+        db.query(models.Transaction)
+        .filter(
+            or_(
+                models.Transaction.from_customer_id == customer_id,
+                models.Transaction.to_customer_id == customer_id,
+            )
+        )
+        .order_by(models.Transaction.created_at.desc())
+        .limit(10000)
+        .all()
+    )
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id", "transaction_type", "amount", "description",
+        "risk_flag", "from_customer_id", "to_customer_id", "created_at"
+    ])
+    for transaction in transactions:
+        writer.writerow([
+            transaction.id,
+            transaction.transaction_type,
+            transaction.amount,
+            transaction.description,
+            transaction.risk_flag,
+            transaction.from_customer_id,
+            transaction.to_customer_id,
+            transaction.created_at
+        ])
+    create_audit_log(
+        db, "export_customer_transactions", actor,
+        f"Exported {len(transactions)} transactions for customer "
+        f"{customer.full_name} (id={customer_id}) as CSV",
         ip_address=ip_address
     )
     return output.getvalue()

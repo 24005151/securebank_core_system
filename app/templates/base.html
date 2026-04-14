@@ -200,6 +200,28 @@
         </div>
     </div>
 
+    {# Session timeout warning modal — shown at 18 minutes of
+       inactivity.  The countdown ticks from 2:00 to 0:00.
+       role="alertdialog" ensures screen readers announce it
+       immediately without waiting for user action. #}
+    <div id="session-modal" class="modal-overlay hidden"
+         role="alertdialog" aria-modal="true"
+         aria-labelledby="session-modal-title"
+         aria-describedby="session-modal-desc">
+        <div class="modal-card">
+            <h3 id="session-modal-title">Session Expiring</h3>
+            <p id="session-modal-desc">
+                Your session will expire in
+                <strong><span id="session-countdown">2:00</span></strong>.
+                Stay on the page to continue working.
+            </p>
+            <div class="modal-actions">
+                <button id="session-logout-btn" type="button" class="ghost-btn">Log out now</button>
+                <button id="session-stay-btn"   type="button" class="primary-btn">Stay logged in</button>
+            </div>
+        </div>
+    </div>
+
     {# Toast container — aria-live="polite" announces new toasts
        to screen readers without interrupting ongoing narration. #}
     <div id="toast-container" class="toast-container"
