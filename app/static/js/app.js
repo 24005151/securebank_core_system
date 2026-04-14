@@ -73,6 +73,106 @@ async function fetchCsrfToken() {
 }
 
 // ---------------------------------------------------------------------------
+// Dark mode — initialised immediately so it runs before anything else
+// and cannot be blocked by a later runtime error.
+// ---------------------------------------------------------------------------
+
+(function initDarkMode() {
+    const DARK_VARS = {
+        "--bg":           "#0f172a",
+        "--card":         "#1e293b",
+        "--sidebar":      "#070f1d",
+        "--text":         "#e2e8f0",
+        "--muted":        "#94a3b8",
+        "--border":       "#334155",
+        "--border-strong":"#475569",
+        "--primary":      "#3b82f6",
+        "--primary-dark": "#2563eb",
+        "--primary-light":"rgba(59,130,246,0.12)",
+        "--success-light":"rgba(22,163,74,0.15)",
+        "--warning-light":"rgba(234,88,12,0.15)",
+        "--danger-light": "rgba(220,38,38,0.15)",
+        "--info-light":   "rgba(8,145,178,0.15)",
+        "--purple-light": "rgba(124,58,237,0.15)",
+        "--shadow":       "0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.2)",
+        "--shadow-hover": "0 4px 16px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2)",
+        "--shadow-lg":    "0 10px 30px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)",
+    };
+    const LIGHT_VARS = {
+        "--bg":           "#f1f5f9",
+        "--card":         "#ffffff",
+        "--sidebar":      "#0f172a",
+        "--text":         "#0f172a",
+        "--muted":        "#64748b",
+        "--border":       "#e2e8f0",
+        "--border-strong":"#cbd5e1",
+        "--primary":      "#2563eb",
+        "--primary-dark": "#1d4ed8",
+        "--primary-light":"#eff6ff",
+        "--success-light":"#f0fdf4",
+        "--warning-light":"#fff7ed",
+        "--danger-light": "#fef2f2",
+        "--info-light":   "#ecfeff",
+        "--purple-light": "#f5f3ff",
+        "--shadow":       "0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(15,23,42,0.05)",
+        "--shadow-hover": "0 4px 16px rgba(15,23,42,0.1), 0 1px 4px rgba(15,23,42,0.05)",
+        "--shadow-lg":    "0 10px 30px rgba(15,23,42,0.12), 0 2px 8px rgba(15,23,42,0.06)",
+    };
+
+    function applyVars(vars) {
+        const root = document.documentElement;
+        for (const [prop, val] of Object.entries(vars)) {
+            root.style.setProperty(prop, val);
+        }
+    }
+
+    function applyDarkMode(enabled) {
+        document.body.classList.toggle("dark-mode", enabled);
+        applyVars(enabled ? DARK_VARS : LIGHT_VARS);
+        if (enabled) {
+            document.body.style.background = "linear-gradient(180deg, #0b1120 0%, #0f172a 100%)";
+        } else {
+            document.body.style.background = "";
+        }
+        const darkIcon    = document.getElementById("dark-icon");
+        const lightIcon   = document.getElementById("light-icon");
+        const label       = document.getElementById("dark-mode-label");
+        if (darkIcon)  darkIcon.style.display  = enabled ? "none" : "";
+        if (lightIcon) lightIcon.style.display = enabled ? "" : "none";
+        if (label)     label.textContent        = enabled ? "Light mode" : "Dark mode";
+        localStorage.setItem("darkMode", String(enabled));
+    }
+
+    // Expose for the button listener wired below.
+    window._applyDarkMode = applyDarkMode;
+
+    // Apply preference immediately on load.
+    const saved = localStorage.getItem("darkMode");
+    if (saved !== null) {
+        applyDarkMode(saved === "true");
+    } else {
+        applyDarkMode(window.matchMedia("(prefers-color-scheme: dark)").matches);
+    }
+
+    // Wire by ID, class, or delegated footer click — whichever finds it.
+    const btn = document.getElementById("dark-mode-toggle")
+             || document.querySelector(".footer-dark-btn");
+    if (btn) {
+        btn.addEventListener("click", () => {
+            applyDarkMode(!document.body.classList.contains("dark-mode"));
+        });
+    } else {
+        // Last-resort: delegate from document so it works regardless of
+        // when the button enters the DOM.
+        document.addEventListener("click", (e) => {
+            if (e.target.closest("#dark-mode-toggle, .footer-dark-btn")) {
+                applyDarkMode(!document.body.classList.contains("dark-mode"));
+            }
+        });
+    }
+})();
+
+// ---------------------------------------------------------------------------
 // DOM refs
 // ---------------------------------------------------------------------------
 
@@ -2288,42 +2388,5 @@ if (lastLoginEl && lastLoginEl.dataset.iso) {
     lastLoginEl.textContent = formatRelativeTime(lastLoginEl.dataset.iso);
 }
 
-// ---------------------------------------------------------------------------
-// Dark mode toggle
-// ---------------------------------------------------------------------------
-
-const darkToggleBtn   = document.getElementById("dark-mode-toggle");
-const darkIcon        = document.getElementById("dark-icon");
-const lightIcon       = document.getElementById("light-icon");
-const darkModeLabel   = document.getElementById("dark-mode-label");
-
-/**
- * Apply or remove the dark-mode class on <body> and update the
- * toggle button icon and label to match the current state.
- *
- * @param {boolean} enabled - True to enable dark mode.
- */
-function applyDarkMode(enabled) {
-    document.body.classList.toggle("dark-mode", enabled);
-    if (darkIcon)      darkIcon.classList.toggle("hidden", enabled);
-    if (lightIcon)     lightIcon.classList.toggle("hidden", !enabled);
-    if (darkModeLabel) darkModeLabel.textContent = enabled ? "Light mode" : "Dark mode";
-}
-
-// On page load restore the user's saved preference, falling back
-// to the OS-level prefers-color-scheme media query.
-const savedDark = localStorage.getItem("darkMode");
-if (savedDark !== null) {
-    applyDarkMode(savedDark === "true");
-} else {
-    applyDarkMode(
-        window.matchMedia("(prefers-color-scheme: dark)").matches
-    );
-}
-
-darkToggleBtn?.addEventListener("click", () => {
-    const isDark = document.body.classList.contains("dark-mode");
-    applyDarkMode(!isDark);
-    // Persist the choice so it survives page reloads.
-    localStorage.setItem("darkMode", String(!isDark));
-});
+// Dark mode is initialised at the top of this file (search for
+// initDarkMode) so it runs before any other code can fail.
