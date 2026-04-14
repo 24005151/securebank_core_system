@@ -414,13 +414,15 @@ def seed_demo_customers_bulk(db: Session):
             "full_name": "Alice Johnson",
             "email": "alice.johnson@example.com",
             "balance": 2500,
-            "is_active": True
+            "is_active": True,
+            "notes": "Prefers email contact. Joint account holder with spouse."
         },
         {
             "full_name": "Michael Smith",
             "email": "michael.smith@example.com",
             "balance": 1800,
-            "is_active": True
+            "is_active": True,
+            "notes": "Business account. Requires monthly statement by post."
         },
         {
             "full_name": "Sarah Williams",
@@ -432,7 +434,8 @@ def seed_demo_customers_bulk(db: Session):
             "full_name": "Daniel Brown",
             "email": "daniel.brown@example.com",
             "balance": 900,
-            "is_active": False
+            "is_active": False,
+            "notes": "Account suspended pending identity verification."
         },
         {
             "full_name": "Emma Taylor",
@@ -480,7 +483,8 @@ def seed_demo_customers_bulk(db: Session):
             email=item["email"],
             account_number=generate_unique_account_number(db),
             balance=item["balance"],
-            is_active=item["is_active"]
+            is_active=item["is_active"],
+            notes=item.get("notes")
         )
         db.add(customer)
         db.commit()

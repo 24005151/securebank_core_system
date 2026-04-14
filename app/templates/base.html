@@ -15,7 +15,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SecureBank Core System{% endblock %}</title>
     {# Single stylesheet — compiled from style.css #}
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=8">
 </head>
 {# body_class is set to 'login-page' by login.html to apply the
    full-screen gradient layout and hide the sidebar/topbar. #}
@@ -229,7 +229,7 @@
 
     {# Main JavaScript bundle — loaded last so all DOM elements
        are available when the script runs. #}
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=8"></script>
 
 </body>
 </html>
