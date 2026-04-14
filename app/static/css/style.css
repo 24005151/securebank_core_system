@@ -1599,26 +1599,11 @@ canvas {
 }
 
 /* ---------------------------------------------------------------------------
-   Dark mode variable overrides — shared ruleset applied by both the
-   OS-level media query and the .dark-mode class set by the JS toggle.
+   Dark mode — controlled entirely by the .dark-mode class toggled by JS.
+   The JS reads prefers-color-scheme on first load and sets the class, so
+   OS preference is still respected without a competing @media block that
+   would prevent the toggle from switching back to light mode.
 --------------------------------------------------------------------------- */
-
-/* Variables */
-@media (prefers-color-scheme: dark) { :root {
-    --bg: #0f172a; --card: #1e293b; --sidebar: #070f1d;
-    --text: #e2e8f0; --muted: #94a3b8;
-    --border: #334155; --border-strong: #475569;
-    --primary: #3b82f6; --primary-dark: #2563eb;
-    --primary-light: rgba(59,130,246,0.12);
-    --success-light: rgba(22,163,74,0.15);
-    --warning-light: rgba(234,88,12,0.15);
-    --danger-light: rgba(220,38,38,0.15);
-    --info-light: rgba(8,145,178,0.15);
-    --purple-light: rgba(124,58,237,0.15);
-    --shadow: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.2);
-    --shadow-hover: 0 4px 16px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2);
-    --shadow-lg: 0 10px 30px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2);
-} }
 
 body.dark-mode {
     --bg: #0f172a; --card: #1e293b; --sidebar: #070f1d;
@@ -1634,28 +1619,6 @@ body.dark-mode {
     --shadow: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.2);
     --shadow-hover: 0 4px 16px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2);
     --shadow-lg: 0 10px 30px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2);
-}
-
-/* Component overrides */
-@media (prefers-color-scheme: dark) {
-    body { background: linear-gradient(180deg, #0b1120 0%, #0f172a 100%); }
-    .topbar { background: rgba(15,23,42,0.95); border-bottom-color: #1e293b; }
-    input, select { background: #1e293b; color: var(--text); border-color: #475569; }
-    .toolbar-card { background: #1a2640; border-color: #334155; }
-    .suggestions-box, .suggestion-item { background: #1e293b; color: var(--text); border-color: #334155; }
-    .suggestion-item:hover, .suggestion-item:focus-visible { background: #253348; opacity: 1; }
-    .table-card { background: #1e293b; }
-    .customer-row:hover, .transaction-row:hover,
-    .audit-row:hover, .staff-row:hover { background: #253348; }
-    .customer-row.inactive { background: #1a2335; border-left-color: #475569; }
-    .modal-card { background: #1e293b; color: var(--text); }
-    .ghost-btn { background: #1e293b; color: var(--text); border-color: #475569; }
-    .ghost-btn:hover { background: #253348; opacity: 1; }
-    .activity-item { background: #253348; border-color: #334155; }
-    .hero-panel { background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 60%, #2563eb 100%); }
-    label { color: #cbd5e1; }
-    .login-page .main-shell { background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e3a5f 100%); }
-    .app-footer { border-top-color: #1e293b; }
 }
 
 body.dark-mode {
