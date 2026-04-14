@@ -70,12 +70,17 @@ def login(
 
     # Store the minimum necessary data in the session.  The
     # user ID is needed by the password-change endpoint to
-    # verify ownership.
+    # verify ownership.  last_login_at is stored as an ISO
+    # string so it survives JSON session serialisation.
     request.session["user"] = {
         "id": user.id,
         "username": user.username,
         "role": user.role,
-        "must_change_password": user.must_change_password
+        "must_change_password": user.must_change_password,
+        "last_login_at": (
+            user.last_login_at.isoformat()
+            if user.last_login_at else None
+        )
     }
 
     # Generate a fresh CSRF token for this session.

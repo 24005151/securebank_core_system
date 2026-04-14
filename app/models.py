@@ -93,6 +93,10 @@ class StaffUser(Base):
     # useful for implementing time-based unlock policies later.
     last_failed_login_at = Column(DateTime, nullable=True)
 
+    # UTC timestamp of the most recent successful login.
+    # NULL until the user has logged in at least once.
+    last_login_at = Column(DateTime, nullable=True)
+
     # UTC timestamp of account creation.
     created_at = Column(
         DateTime, nullable=False, default=_now
@@ -133,6 +137,10 @@ class Customer(Base):
 
     # Inactive accounts cannot participate in any transaction.
     is_active = Column(Boolean, nullable=False, default=True)
+
+    # Free-text notes entered by staff (e.g. contact preferences,
+    # special circumstances).  NULL means no notes recorded.
+    notes = Column(String(500), nullable=True)
 
     # created_at is set once at creation and never changed.
     # updated_at is refreshed on every edit or transaction so

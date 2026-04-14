@@ -598,10 +598,13 @@ def authenticate_staff_user(
         db.commit()
         return None, "Invalid username or password."
 
-    # Successful login — reset the failure counters.
+    # Successful login — reset the failure counters and
+    # record when this login occurred so we can surface it in
+    # the sidebar ("Last login: ...").
     user.failed_login_attempts = 0
     user.is_locked = False
     user.last_failed_login_at = None
+    user.last_login_at = _now()
     db.commit()
 
     return user, None
@@ -820,7 +823,8 @@ def create_customer(
         email=customer.email.strip().lower(),
         account_number=generate_unique_account_number(db),
         balance=customer.balance,
-        is_active=True
+        is_active=True,
+        notes=customer.notes.strip() if customer.notes else None
     )
     db.add(db_customer)
     db.commit()
@@ -875,6 +879,9 @@ def update_customer(
 
     customer.full_name = payload.full_name.strip()
     customer.email = payload.email.strip().lower()
+    customer.notes = (
+        payload.notes.strip() if payload.notes else None
+    )
     customer.updated_at = _now()
 
     db.commit()

@@ -791,6 +791,13 @@ function renderCustomerDetail(customer, transactions = []) {
             </div>
         </div>
 
+        <!-- Notes — shown only when a note exists -->
+        ${customer.notes ? `
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px;">Notes</div>
+            <div style="font-size:13px;line-height:1.5;white-space:pre-wrap;">${escapeHtml(customer.notes)}</div>
+        </div>` : ""}
+
         <!-- Quick actions for manager+ users -->
         <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;">
             ${mgr && customer.is_active  ? `<button type="button" class="danger-btn"  data-action="deactivate" data-id="${customer.id}">Deactivate Account</button>` : ""}
@@ -1272,9 +1279,11 @@ async function viewCustomer(customerId) {
             const editId    = document.getElementById("edit-customer-id");
             const editName  = document.getElementById("edit-full-name");
             const editEmail = document.getElementById("edit-email");
+            const editNotes = document.getElementById("edit-notes");
             if (editId)    editId.value    = customer.id;
             if (editName)  editName.value  = customer.full_name;
             if (editEmail) editEmail.value = customer.email;
+            if (editNotes) editNotes.value = customer.notes || "";
         }
 
         document.getElementById("customer-view-section")?.scrollIntoView({
@@ -1298,6 +1307,8 @@ async function startEditCustomer(customerId) {
         document.getElementById("edit-customer-id").value    = customer.id;
         document.getElementById("edit-full-name").value      = customer.full_name;
         document.getElementById("edit-email").value          = customer.email;
+        const editNotes = document.getElementById("edit-notes");
+        if (editNotes) editNotes.value = customer.notes || "";
         showToast(`Loaded ${customer.full_name} into edit form.`);
         document.getElementById("edit-full-name").focus();
     } catch (error) { showToast(error.message, true); }
@@ -1367,9 +1378,15 @@ async function reactivateCustomer(customerId) {
  * @param {number} customerId - Primary key of the customer.
  */
 async function deleteCustomer(customerId) {
+    // Look up the customer name from cache so the modal message
+    // clearly identifies who is about to be deleted.
+    const customer = cachedCustomers.find(c => c.id === customerId);
+    const label = customer
+        ? `"${customer.full_name}" (${customer.account_number})`
+        : `customer #${customerId}`;
     openConfirmModal(
         "Delete Customer",
-        "Delete this customer record?",
+        `Permanently delete ${label}? This cannot be undone.`,
         async () => {
             try {
                 await handleJsonResponse(
@@ -1402,9 +1419,11 @@ async function deleteCustomer(customerId) {
                 const editId    = document.getElementById("edit-customer-id");
                 const editName  = document.getElementById("edit-full-name");
                 const editEmail = document.getElementById("edit-email");
+                const editNotes = document.getElementById("edit-notes");
                 if (editId)    editId.value    = "";
                 if (editName)  editName.value  = "";
                 if (editEmail) editEmail.value = "";
+                if (editNotes) editNotes.value = "";
             } catch (error) { showMessage(error.message, true); }
         }
     );
@@ -1510,6 +1529,7 @@ customerForm?.addEventListener("submit", async (event) => {
     const full_name = document.getElementById("full_name").value.trim();
     const email     = document.getElementById("email").value.trim();
     const balance   = parseInt(document.getElementById("balance").value, 10);
+    const notes     = document.getElementById("notes")?.value.trim() || null;
     if (!full_name || !email || Number.isNaN(balance)) {
         showMessage("Full name, email, and opening balance are required.", true);
         return;
@@ -1520,7 +1540,10 @@ customerForm?.addEventListener("submit", async (event) => {
             await fetch("/api/customers", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ full_name, email, balance })
+                body: JSON.stringify({
+                    full_name, email, balance,
+                    notes: notes || null
+                })
             })
         );
         customerForm.reset();
@@ -1543,6 +1566,7 @@ editCustomerForm?.addEventListener("submit", async (event) => {
     const customerId = document.getElementById("edit-customer-id").value;
     const full_name  = document.getElementById("edit-full-name").value.trim();
     const email      = document.getElementById("edit-email").value.trim();
+    const notes      = document.getElementById("edit-notes")?.value.trim() || null;
     if (!customerId) {
         showEditMessage("Select a customer first using the Edit button.", true);
         return;
@@ -1557,7 +1581,7 @@ editCustomerForm?.addEventListener("submit", async (event) => {
             await fetch(`/api/customers/${customerId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ full_name, email })
+                body: JSON.stringify({ full_name, email, notes: notes || null })
             })
         );
         showEditMessage("Customer updated successfully.");
@@ -1955,3 +1979,78 @@ document.addEventListener("click", (event) => {
 // Expose unlockStaffUser on window for any legacy callers.
 // Event delegation is the primary mechanism — this is a fallback.
 window.unlockStaffUser = unlockStaffUser;
+
+// ---------------------------------------------------------------------------
+// Last-login timestamp formatting
+// ---------------------------------------------------------------------------
+
+/**
+ * Format an ISO 8601 date string as a human-readable relative time.
+ * Returns strings like "2 hours ago", "Yesterday at 14:30", or a
+ * full date for older entries.
+ *
+ * @param {string} iso - ISO 8601 date string from the server.
+ * @returns {string} Human-readable relative time string.
+ */
+function formatRelativeTime(iso) {
+    const date  = new Date(iso);
+    const now   = new Date();
+    const diffMs = now - date;
+    const diffMins  = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays  = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1)   return "Just now";
+    if (diffMins < 60)  return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hr ago`;
+    if (diffDays === 1) {
+        return `Yesterday ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    }
+    return date.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Populate the last-login span if it exists in the sidebar.
+const lastLoginEl = document.getElementById("last-login-ts");
+if (lastLoginEl && lastLoginEl.dataset.iso) {
+    lastLoginEl.textContent = formatRelativeTime(lastLoginEl.dataset.iso);
+}
+
+// ---------------------------------------------------------------------------
+// Dark mode toggle
+// ---------------------------------------------------------------------------
+
+const darkToggleBtn   = document.getElementById("dark-mode-toggle");
+const darkIcon        = document.getElementById("dark-icon");
+const lightIcon       = document.getElementById("light-icon");
+const darkModeLabel   = document.getElementById("dark-mode-label");
+
+/**
+ * Apply or remove the dark-mode class on <body> and update the
+ * toggle button icon and label to match the current state.
+ *
+ * @param {boolean} enabled - True to enable dark mode.
+ */
+function applyDarkMode(enabled) {
+    document.body.classList.toggle("dark-mode", enabled);
+    if (darkIcon)      darkIcon.classList.toggle("hidden", enabled);
+    if (lightIcon)     lightIcon.classList.toggle("hidden", !enabled);
+    if (darkModeLabel) darkModeLabel.textContent = enabled ? "Light mode" : "Dark mode";
+}
+
+// On page load restore the user's saved preference, falling back
+// to the OS-level prefers-color-scheme media query.
+const savedDark = localStorage.getItem("darkMode");
+if (savedDark !== null) {
+    applyDarkMode(savedDark === "true");
+} else {
+    applyDarkMode(
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+    );
+}
+
+darkToggleBtn?.addEventListener("click", () => {
+    const isDark = document.body.classList.contains("dark-mode");
+    applyDarkMode(!isDark);
+    // Persist the choice so it survives page reloads.
+    localStorage.setItem("darkMode", String(!isDark));
+});

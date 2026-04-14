@@ -40,6 +40,8 @@ class CustomerCreate(BaseModel):
     email: EmailStr
     # Opening balance defaults to zero; cannot be negative.
     balance: int = Field(default=0, ge=0)
+    # Optional free-text notes; empty string is stored as None.
+    notes: str | None = Field(default=None, max_length=500)
 
     @field_validator("full_name")
     @classmethod
@@ -61,6 +63,7 @@ class CustomerUpdate(BaseModel):
 
     full_name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
+    notes: str | None = Field(default=None, max_length=500)
 
 
 class CustomerResponse(BaseModel):
@@ -78,6 +81,7 @@ class CustomerResponse(BaseModel):
     account_number: str
     balance: int
     is_active: bool
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 

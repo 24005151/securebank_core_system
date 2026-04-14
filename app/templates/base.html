@@ -107,6 +107,14 @@
                     <div class="user-info">
                         <div class="user-card-name">{{ user.username }}</div>
                         <div class="user-card-role">{{ user.role }}</div>
+                        {# Show last login timestamp if available #}
+                        {% if user.last_login_at %}
+                        <div class="user-last-login"
+                             title="Last login: {{ user.last_login_at }}">
+                            Last login: <span id="last-login-ts"
+                                data-iso="{{ user.last_login_at }}"></span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {# Sign-out is handled by the logout listener in app.js #}
@@ -139,6 +147,39 @@
             <main class="content-area" id="main-content">
                 {% block content %}{% endblock %}
             </main>
+
+            {# Footer — version, year, and dark-mode toggle #}
+            <footer class="app-footer">
+                <span>SecureBank Core System &mdash; v7</span>
+                <span class="footer-sep">&bull;</span>
+                <span>&copy; 2026 SecureBank. For assessment purposes only.</span>
+                <span class="footer-sep">&bull;</span>
+                <button id="dark-mode-toggle" type="button"
+                        class="ghost-btn footer-dark-btn"
+                        aria-label="Toggle dark mode" title="Toggle dark mode">
+                    {# Icon swapped by JS once the preference is known #}
+                    <svg id="dark-icon" width="15" height="15" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                    <svg id="light-icon" width="15" height="15" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true" class="hidden">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <span id="dark-mode-label">Dark mode</span>
+                </button>
+            </footer>
 
         </div>{# /main-shell #}
     </div>{# /layout-shell #}
