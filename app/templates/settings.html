@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Settings | SecureBank{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block content %}
+
+<div id="settings-page" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:900px;">
+
+    <!-- Change Password -->
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Change Password</h3>
+            <span class="panel-badge">Security</span>
+        </div>
+        <form id="change-password-form">
+            <input type="hidden" id="change-password-user-id">
+            <div class="form-group">
+                <label for="change-password-current">Current Password</label>
+                <input type="password" id="change-password-current" maxlength="100" required autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label for="change-password-new">New Password</label>
+                <input type="password" id="change-password-new" maxlength="100" required autocomplete="new-password">
+                <span class="field-help">Min 8 chars, uppercase, lowercase, number</span>
+            </div>
+            <div class="form-group">
+                <label for="change-password-confirm">Confirm New Password</label>
+                <input type="password" id="change-password-confirm" maxlength="100" required autocomplete="new-password">
+            </div>
+            <button type="submit" class="primary-btn full-width-btn">Change Password</button>
+        </form>
+        <p id="change-password-message" class="status-message"></p>
+    </div>
+
+    <!-- Appearance -->
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Appearance</h3>
+            <span class="panel-badge">Display</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <div>
+                    <div style="font-weight:600;font-size:14px;">Dark Mode</div>
+                    <div style="font-size:13px;color:var(--muted);">Switch between light and dark themes</div>
+                </div>
+                <button id="settings-dark-btn" type="button" class="ghost-btn" style="white-space:nowrap;min-width:110px;">
+                    Dark mode
+                </button>
+            </div>
+            <div style="border-top:1px solid var(--border);padding-top:16px;">
+                <div style="font-weight:600;font-size:14px;margin-bottom:4px;">Session Timeout</div>
+                <div style="font-size:13px;color:var(--muted);">Sessions automatically expire after 20 minutes of inactivity. A 2-minute warning is shown before expiry.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Info -->
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Account Information</h3>
+            <span class="panel-badge">Profile</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:14px;">
+            <div style="display:flex;justify-content:space-between;">
+                <span style="color:var(--muted);">Username</span>
+                <strong>{{ user.username }}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+                <span style="color:var(--muted);">Role</span>
+                <span class="status-pill {% if user.role == 'superadmin' %}status-superadmin{% elif user.role == 'manager' %}status-manager{% else %}status-active{% endif %}">{{ user.role }}</span>
+            </div>
+            {% if user.last_login_at %}
+            <div style="display:flex;justify-content:space-between;">
+                <span style="color:var(--muted);">Last login</span>
+                <span id="last-login-settings" data-iso="{{ user.last_login_at }}" style="color:var(--muted);font-size:13px;"></span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- API Access -->
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>API Access</h3>
+            <span class="panel-badge">Integration</span>
+        </div>
+        <div style="font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:10px;">
+            <p style="margin:0;">SecureBank exposes a REST API. Authenticate using either a session cookie or an <code>X-API-Key</code> header.</p>
+            <p style="margin:0;">API keys are configured via the <code>SECUREBANK_API_KEY</code> environment variable on the server.</p>
+            <p style="margin:0;">Key endpoints: <code>/api/customers</code>, <code>/api/transactions</code>, <code>/api/audit-logs</code>, <code>/api/export/customers</code>.</p>
+        </div>
+    </div>
+
+</div>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+{% endblock %}

@@ -27,6 +27,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
+from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -152,3 +153,29 @@ app.mount(
 app.include_router(pages.router)
 app.include_router(auth.router)
 app.include_router(api.router)
+
+# ---------------------------------------------------------------------------
+# Custom error pages
+# ---------------------------------------------------------------------------
+
+_templates = Jinja2Templates(directory="app/templates")
+
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, _exc):
+    user = request.session.get("user")
+    return _templates.TemplateResponse(
+        request, "errors/404.html",
+        {"user": user, "active_page": None},
+        status_code=404
+    )
+
+
+@app.exception_handler(403)
+async def forbidden_handler(request: Request, exc):
+    user = request.session.get("user")
+    return _templates.TemplateResponse(
+        request, "errors/403.html",
+        {"user": user, "active_page": None},
+        status_code=403
+    )

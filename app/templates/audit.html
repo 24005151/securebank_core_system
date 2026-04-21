@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Audit Log | SecureBank{% endblock %}
+{% block page_title %}Audit Log{% endblock %}
+{% block content %}
+
+<div class="panel-card">
+    <div class="panel-header">
+        <h3>Audit Log</h3>
+        <span class="panel-badge">Security</span>
+    </div>
+
+    <div class="toolbar-card">
+        <input type="text" id="audit-actor-filter" placeholder="Filter by actor" aria-label="Filter audit log by actor">
+        <input type="text" id="audit-event-filter" placeholder="Filter by event type" aria-label="Filter by event type">
+        <select id="audit-result-filter" aria-label="Filter by result">
+            <option value="">All Results</option>
+            <option value="success">Success</option>
+            <option value="failure">Failure</option>
+        </select>
+        <input type="date" id="audit-date-from" aria-label="From date" title="From date">
+        <input type="date" id="audit-date-to"   aria-label="To date"   title="To date">
+        <button id="refresh-audit-btn" type="button" class="primary-btn">Apply</button>
+        <button id="clear-audit-btn"  type="button" class="ghost-btn">Clear</button>
+    </div>
+
+    <div id="audit-list" class="table-card"></div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+{% endblock %}

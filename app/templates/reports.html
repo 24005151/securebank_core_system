@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Reports | SecureBank{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block content %}
+
+<div id="reports-page">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+
+        <!-- Risk summary -->
+        <div class="panel-card">
+            <div class="panel-header">
+                <h3>Risk Summary</h3>
+                <span class="panel-badge">Flagged Transactions</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:8px 4px 4px;">
+                <div id="risk-summary-box" class="stat-grid">
+                    <div class="stat-item"><p class="muted-text">Loading…</p></div>
+                </div>
+                <div style="width:160px;flex-shrink:0;">
+                    <canvas id="risk-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Type breakdown -->
+        <div class="panel-card">
+            <div class="panel-header">
+                <h3>Transaction Types</h3>
+                <span class="panel-badge">All Time</span>
+            </div>
+            <div style="padding:16px;max-width:320px;margin:0 auto;">
+                <canvas id="type-breakdown-chart" height="200"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Monthly volumes line chart -->
+    <div class="panel-card" style="margin-bottom:20px;">
+        <div class="panel-header">
+            <h3>Monthly Transaction Volumes</h3>
+            <span class="panel-badge">Last 12 Months</span>
+        </div>
+        <div style="padding:16px;">
+            <canvas id="monthly-volumes-chart" height="100"></canvas>
+        </div>
+    </div>
+
+    <!-- Top customers -->
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Top Customers by Volume</h3>
+            <span class="panel-badge">Top 5</span>
+        </div>
+        <div id="top-customers-list" class="table-card">
+            <div class="customer-item"><p class="muted-text">Loading…</p></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Chart.js must load before app.js (which auto-inits the charts).
+     CSP allows cdn.jsdelivr.net — see SecurityHeadersMiddleware. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+{% endblock %}

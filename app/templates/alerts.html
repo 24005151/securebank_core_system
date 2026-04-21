@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Alerts | SecureBank{% endblock %}
+{% block page_title %}Alerts{% endblock %}
+{% block content %}
+
+<div id="alerts-page">
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+        <!-- Risk-flagged transactions -->
+        <div class="panel-card" style="grid-column:1/-1;">
+            <div class="panel-header">
+                <h3>Risk-Flagged Transactions</h3>
+                <span class="panel-badge" id="alerts-risk-count">—</span>
+            </div>
+            <div id="risk-transactions-list" class="table-card">
+                <div class="customer-item"><p class="muted-text">Loading…</p></div>
+            </div>
+        </div>
+
+        <!-- Locked staff accounts -->
+        <div class="panel-card" style="grid-column:1/-1;">
+            <div class="panel-header">
+                <h3>Locked Staff Accounts</h3>
+                <span class="panel-badge" id="alerts-locked-count">—</span>
+            </div>
+            <div id="locked-staff-list" class="table-card">
+                <div class="customer-item"><p class="muted-text">Loading…</p></div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+{% endblock %}

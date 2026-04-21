@@ -251,13 +251,15 @@ select:focus-visible {
     outline-offset: 2px;
 }
 
-.sidebar-link[aria-current="page"] {
+.sidebar-link[aria-current="page"],
+.sidebar-link--active {
     background: var(--sidebar-active);
     color: white;
     font-weight: 600;
 }
 
-.sidebar-link[aria-current="page"] .sidebar-icon {
+.sidebar-link[aria-current="page"] .sidebar-icon,
+.sidebar-link--active .sidebar-icon {
     opacity: 1;
 }
 
@@ -333,7 +335,7 @@ select:focus-visible {
 }
 
 .topbar {
-    background: rgba(255,255,255,0.9);
+    background: var(--card);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
@@ -472,20 +474,13 @@ select:focus-visible {
     color: var(--primary-dark);
 }
 
-.badge-green {
-    background: var(--success-light);
-    color: var(--success);
-}
-
-.badge-orange {
-    background: var(--warning-light);
-    color: var(--warning);
-}
-
-.badge-blue {
-    background: var(--info-light);
-    color: var(--info);
-}
+.badge-green  { background: var(--success-light); color: var(--success); }
+.badge-orange { background: var(--warning-light); color: var(--warning); }
+.badge-blue   { background: var(--info-light);    color: var(--info);    }
+.badge-red,
+.badge-danger  { background: var(--danger-light);  color: var(--danger);  }
+.badge-warning { background: var(--warning-light); color: var(--warning); }
+.badge-purple  { background: var(--purple-light);  color: var(--purple);  }
 
 .panel-card {
     padding: 22px;
@@ -599,6 +594,41 @@ select:focus-visible {
 }
 
 /* ---------------------------------------------------------------------------
+   Stat key-value pairs — used on profile pages
+--------------------------------------------------------------------------- */
+.stat-grid {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+.stat-item:last-child { border-bottom: none; }
+
+.stat-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    flex-shrink: 0;
+}
+
+.stat-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: right;
+    word-break: break-word;
+}
+
+/* ---------------------------------------------------------------------------
    Forms
 --------------------------------------------------------------------------- */
 .form-group {
@@ -653,6 +683,25 @@ select {
     background-repeat: no-repeat;
     background-position: right 12px center;
     padding-right: 34px;
+}
+
+textarea {
+    width: 100%;
+    padding: 10px 13px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    background: var(--card);
+    color: var(--text);
+    font-family: inherit;
+    line-height: 1.5;
+    resize: vertical;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
 }
 
 input::placeholder {
@@ -1069,6 +1118,18 @@ button:disabled {
 .txn-amount.withdraw { color: var(--warning); }
 .txn-amount.transfer { color: var(--info); }
 
+/* Risk-flagged rows get a red left border + tinted background */
+.transaction-row.risk-flagged {
+    border-left: 3px solid var(--danger);
+    background: var(--danger-light);
+    padding-left: 13px;
+}
+.transaction-row.risk-flagged:hover { background: #fee2e2; }
+
+/* Clickable rows (audit, transactions) show pointer + expand caret */
+.transaction-row.clickable,
+.audit-row.clickable { cursor: pointer; }
+
 .flag-chip {
     display: inline-flex;
     align-items: center;
@@ -1343,7 +1404,7 @@ button:disabled {
 
 .modal-card {
     width: 100%;
-    max-width: 400px;
+    max-width: 420px;
     background: var(--card);
     border-radius: var(--radius-lg);
     padding: 24px;
@@ -1363,11 +1424,41 @@ button:disabled {
     margin: 0;
 }
 
+.modal-card--wide { max-width: 640px; }
+
 .modal-actions {
     display: flex;
     justify-content: flex-end;
     gap: 8px;
     margin-top: 20px;
+}
+
+/* Detail table inside modals */
+.detail-grid {
+    display: grid;
+    gap: 0;
+    margin: 12px 0;
+}
+.detail-row {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    align-items: baseline;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-key {
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+}
+.detail-val {
+    color: var(--text);
+    word-break: break-word;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1398,6 +1489,8 @@ button:disabled {
 
 .toast-success { background: var(--success); }
 .toast-error   { background: var(--danger);  }
+.toast-info    { background: var(--info);    }
+.toast-warning { background: var(--warning); }
 
 /* ---------------------------------------------------------------------------
    Loading overlay
@@ -1648,6 +1741,11 @@ body.dark-mode .hero-panel { background: linear-gradient(135deg, #1e3a5f 0%, #1d
 body.dark-mode label { color: #cbd5e1; }
 body.dark-mode .login-page .main-shell { background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e3a5f 100%); }
 body.dark-mode .app-footer { border-top-color: #1e293b; }
+body.dark-mode textarea { background: #1e293b; color: var(--text); border-color: #475569; }
+body.dark-mode .transaction-row.risk-flagged { background: rgba(220,38,38,0.12); }
+body.dark-mode .transaction-row.risk-flagged:hover { background: rgba(220,38,38,0.2); }
+body.dark-mode .detail-row { border-bottom-color: #334155; }
+body.dark-mode .loading-overlay { background: rgba(15,23,42,0.7); }
 
 /* ---------------------------------------------------------------------------
    Responsive

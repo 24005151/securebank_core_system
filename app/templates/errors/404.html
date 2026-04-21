@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}404 — Page Not Found | SecureBank{% endblock %}
+{% block page_title %}Page Not Found{% endblock %}
+{% block content %}
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;gap:16px;">
+    <div style="font-size:80px;font-weight:800;color:var(--border-strong);line-height:1;">404</div>
+    <h2 style="margin:0;font-size:22px;color:var(--text);">Page not found</h2>
+    <p style="color:var(--muted);max-width:380px;margin:0;">
+        The page you're looking for doesn't exist or has been moved.
+    </p>
+    <div style="display:flex;gap:10px;margin-top:8px;">
+        <a href="/" class="primary-btn" style="text-decoration:none;">Go to Dashboard</a>
+        <button type="button" class="ghost-btn go-back-btn">Go Back</button>
+    </div>
+</div>
+{% endblock %}

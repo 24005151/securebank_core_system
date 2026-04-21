@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Staff Management | SecureBank{% endblock %}
+{% block page_title %}Staff Management{% endblock %}
+{% block content %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+    <!-- Staff list — full width -->
+    <div class="panel-card" style="grid-column:1/-1;">
+        <div class="panel-header">
+            <h3>Staff Users</h3>
+            <span class="panel-badge">Manager Only</span>
+        </div>
+
+        <!-- Search/filter bar -->
+        <div class="toolbar-card" style="margin-bottom:14px;">
+            <input type="text" id="staff-search-input" placeholder="Search username…"
+                   aria-label="Search staff" style="min-width:200px;">
+            <select id="staff-role-filter" aria-label="Filter by role">
+                <option value="">All Roles</option>
+                <option value="staff">Staff</option>
+                <option value="manager">Manager</option>
+                <option value="superadmin">Superadmin</option>
+            </select>
+            <select id="staff-lock-filter" aria-label="Filter by lock status">
+                <option value="">All Accounts</option>
+                <option value="locked">Locked Only</option>
+                <option value="active">Active Only</option>
+            </select>
+            <button id="staff-filter-btn" type="button" class="primary-btn">Filter</button>
+            <button id="staff-clear-btn"  type="button" class="ghost-btn">Clear</button>
+        </div>
+
+        <div id="staff-user-list" class="table-card">
+            <div class="customer-item"><p class="muted-text">Loading staff users…</p></div>
+        </div>
+    </div>
+
+    <!-- Create staff -->
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Create Staff User</h3>
+            <span class="panel-badge">Manager Only</span>
+        </div>
+        <form id="create-staff-form">
+            <div class="form-group">
+                <label for="new-staff-username">Username</label>
+                <input type="text" id="new-staff-username" maxlength="50" required autocomplete="off">
+                <span class="field-help">Letters, numbers, underscores only</span>
+            </div>
+            <div class="form-group">
+                <label for="new-staff-password">Password</label>
+                <input type="password" id="new-staff-password" maxlength="100" required autocomplete="new-password">
+                <span class="field-help">Min 8 chars, uppercase, lowercase, number</span>
+            </div>
+            <div class="form-group">
+                <label for="new-staff-role">Role</label>
+                <select id="new-staff-role">
+                    <option value="staff">Staff</option>
+                    <option value="manager">Manager</option>
+                </select>
+            </div>
+            <button type="submit" class="primary-btn full-width-btn">Create Staff User</button>
+        </form>
+        <p id="create-staff-message" class="status-message"></p>
+    </div>
+
+    <!-- Change own password -->
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>Change Password</h3>
+            <span class="panel-badge">Your Account</span>
+        </div>
+        <form id="change-password-form">
+            <input type="hidden" id="change-password-user-id">
+            <div class="form-group">
+                <label for="change-password-current">Current Password</label>
+                <input type="password" id="change-password-current" maxlength="100" required autocomplete="current-password">
+            </div>
+            <div class="form-group">
+                <label for="change-password-new">New Password</label>
+                <input type="password" id="change-password-new" maxlength="100" required autocomplete="new-password">
+                <span class="field-help">Min 8 chars, uppercase, lowercase, number</span>
+            </div>
+            <div class="form-group">
+                <label for="change-password-confirm">Confirm New Password</label>
+                <input type="password" id="change-password-confirm" maxlength="100" required autocomplete="new-password">
+            </div>
+            <button type="submit" class="primary-btn full-width-btn">Change Password</button>
+        </form>
+        <p id="change-password-message" class="status-message"></p>
+    </div>
+
+</div>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+{% endblock %}

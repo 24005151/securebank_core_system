@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Transactions | SecureBank{% endblock %}
+{% block page_title %}Transaction History{% endblock %}
+{% block content %}
+
+<div class="panel-card">
+    <div class="panel-header">
+        <h3>Transaction History</h3>
+        <span class="panel-badge">Activity</span>
+    </div>
+
+    <div class="toolbar-card">
+        <input type="text" id="transaction-account-filter"
+               placeholder="Filter by account number" aria-label="Filter by account number">
+        <select id="transaction-type-filter" aria-label="Filter by type">
+            <option value="">All Types</option>
+            <option value="deposit">Deposit</option>
+            <option value="withdraw">Withdraw</option>
+            <option value="transfer">Transfer</option>
+        </select>
+        <select id="transaction-risk-filter" aria-label="Filter by risk flag">
+            <option value="">All Transactions</option>
+            <option value="true">Risk Flagged Only</option>
+            <option value="false">No Risk Flag</option>
+        </select>
+        <input type="number" id="transaction-amount-min" placeholder="Min £" min="0" aria-label="Minimum amount" style="width:90px;">
+        <input type="number" id="transaction-amount-max" placeholder="Max £" min="0" aria-label="Maximum amount" style="width:90px;">
+        <input type="date"   id="transaction-date-from" aria-label="From date" title="From date">
+        <input type="date"   id="transaction-date-to"   aria-label="To date"   title="To date">
+        <button id="filter-transactions-btn" type="button" class="primary-btn">Apply</button>
+        <button id="clear-transactions-btn" type="button" class="ghost-btn">Clear</button>
+        <button id="export-transactions-btn" type="button" class="ghost-btn">Export CSV</button>
+    </div>
+
+    <div id="transaction-list" class="table-card"></div>
+
+    <div class="toolbar-card single-toolbar" style="margin-top:10px;">
+        <button id="transactions-prev-btn" type="button" class="ghost-btn">&#8592; Prev</button>
+        <span id="transactions-page-info" class="muted-text" style="padding:0 10px;">Page 1</span>
+        <button id="transactions-next-btn" type="button" class="ghost-btn">Next &#8594;</button>
+    </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+{% endblock %}

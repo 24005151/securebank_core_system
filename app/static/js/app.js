@@ -335,6 +335,38 @@ function showCreateStaffMessage(message, isError = false) {
     _showStatusMessage(createStaffMessageBox, message, isError);
 }
 
+/**
+ * Open the shared detail/info modal with arbitrary HTML content.
+ * Used for click-to-expand rows (transactions, audit logs, staff).
+ *
+ * @param {string} title       - Modal heading.
+ * @param {string} contentHtml - Safe HTML to render in the body.
+ */
+function openDetailModal(title, contentHtml) {
+    const modal = document.getElementById("detail-modal");
+    const titleEl = document.getElementById("detail-modal-title");
+    const bodyEl  = document.getElementById("detail-modal-body");
+    if (!modal || !titleEl || !bodyEl) return;
+    titleEl.textContent = title;
+    bodyEl.innerHTML    = contentHtml;
+    modal.classList.remove("hidden");
+    document.getElementById("detail-modal-close")?.focus();
+}
+
+/** Close the detail modal. */
+function closeDetailModal() {
+    document.getElementById("detail-modal")?.classList.add("hidden");
+}
+
+// Wire the close button and backdrop click for the detail modal.
+document.getElementById("detail-modal-close")?.addEventListener("click", closeDetailModal);
+document.getElementById("detail-modal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeDetailModal();
+});
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDetailModal();
+});
+
 /** Show a message in the change-password form's status box. */
 function showChangePasswordMessage(message, isError = false) {
     _showStatusMessage(changePasswordMessageBox, message, isError);
@@ -385,6 +417,20 @@ function formatDateTime(value) {
         day: "2-digit", month: "short", year: "numeric",
         hour: "2-digit", minute: "2-digit"
     });
+}
+
+/**
+ * Format a pence integer as a pounds-and-pence string with £ symbol.
+ * Always shows two decimal places, e.g. fmt(4100) → "£41.00".
+ *
+ * @param {number} pence - Integer amount in pence.
+ * @returns {string}
+ */
+function fmt(pence) {
+    return `£${(pence / 100).toLocaleString("en-GB", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    })}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -537,7 +583,7 @@ function renderDashboardSummary(summary) {
         "stat-suspicious-transactions": summary.suspicious_transactions,
         "stat-low-balance-customers": summary.low_balance_customers,
         "stat-total-transactions":    summary.total_transactions,
-        "stat-total-balance":         `£${summary.total_balance}`
+        "stat-total-balance":         fmt(summary.total_balance)
     };
     Object.entries(values).forEach(([id, value]) => {
         const el = document.getElementById(id);
@@ -666,7 +712,7 @@ function renderBalanceHistory(customer, transactions) {
             plugins: { legend: { display: false } },
             scales: {
                 y: {
-                    ticks: { callback: v => `£${v.toLocaleString()}` },
+                    ticks: { callback: v => `£${Number(v).toLocaleString("en-GB", {minimumFractionDigits:2, maximumFractionDigits:2})}` },
                     beginAtZero: false
                 }
             }
@@ -723,7 +769,7 @@ async function fetchRecentTransactions() {
                     <div class="txn-desc">${escapeHtml(t.description || "—")}</div>
                 </div>
                 <div class="txn-right">
-                    <div class="txn-amount" style="color:${typeColour};">${sign}£${(t.amount).toLocaleString()}</div>
+                    <div class="txn-amount" style="color:${typeColour};">${sign}${fmt(t.amount)}</div>
                     <div class="txn-date">${escapeHtml(formatDateTime(t.created_at))}</div>
                     ${t.risk_flag ? `<span class="status-pill status-risk" title="Risk flagged">⚠ Risk</span>` : ""}
                 </div>
@@ -845,13 +891,107 @@ function renderCustomers(customers) {
                 </div>
             </div>
             <div class="customer-right">
-                <div class="customer-balance">£${c.balance.toLocaleString()}</div>
+                <div class="customer-balance">${fmt(c.balance)}</div>
                 <span class="status-pill ${c.is_active ? "status-active" : "status-inactive"}">
                     ${c.is_active ? "Active" : "Inactive"}
                 </span>
             </div>
         </div>
     `).join("");
+}
+
+// ---------------------------------------------------------------------------
+// Dedicated Customers page — full list with inline notes
+// ---------------------------------------------------------------------------
+
+/** Zero-based page index for the dedicated customers page. */
+let customersFullPage = 0;
+
+/**
+ * Render the full customer list on the dedicated /customers page.
+ * Each row shows notes inline and links "View Profile" to /customers/{id}.
+ *
+ * @param {Array} customers - CustomerResponse objects from the API.
+ */
+function renderCustomersFull(customers) {
+    const list = document.getElementById("customers-full-list");
+    if (!list) return;
+
+    if (!customers.length) {
+        list.innerHTML =
+            `<div class="customer-item"><p class="muted-text">No customers match your search.</p></div>`;
+        return;
+    }
+
+    const mgr = isPrivileged();
+    list.innerHTML = customers.map((c) => `
+        <div class="customer-row ${c.is_active ? "" : "inactive"}" data-customer-id="${c.id}">
+            <div class="customer-avatar" aria-hidden="true">${escapeHtml(initials(c.full_name))}</div>
+            <div class="customer-main" style="flex:1;min-width:0;">
+                <div class="customer-name">${escapeHtml(c.full_name)}</div>
+                <div class="customer-sub">
+                    <span style="font-family:ui-monospace,monospace;">${escapeHtml(c.account_number)}</span>
+                    &middot; ${escapeHtml(c.email)}
+                </div>
+                ${c.notes ? `
+                <div style="margin-top:6px;padding:6px 10px;background:var(--primary-light);border-left:3px solid var(--primary);border-radius:4px;font-size:12px;line-height:1.5;color:var(--text);white-space:pre-wrap;">${escapeHtml(c.notes)}</div>
+                ` : ""}
+                <div class="customer-actions" style="margin-top:8px;">
+                    <a href="/customers/${c.id}" class="ghost-btn" style="text-decoration:none;">View Profile</a>
+                    ${mgr &&  c.is_active ? `<button type="button" class="danger-btn"  data-cf-action="deactivate" data-id="${c.id}">Deactivate</button>` : ""}
+                    ${mgr && !c.is_active ? `<button type="button" class="success-btn" data-cf-action="activate"   data-id="${c.id}">Activate</button>` : ""}
+                    ${mgr ? `<button type="button" class="danger-btn" data-cf-action="delete" data-id="${c.id}">Delete</button>` : ""}
+                </div>
+            </div>
+            <div class="customer-right" style="flex-shrink:0;text-align:right;">
+                <div class="customer-balance">${fmt(c.balance)}</div>
+                <span class="status-pill ${c.is_active ? "status-active" : "status-inactive"}">
+                    ${c.is_active ? "Active" : "Inactive"}
+                </span>
+                ${c.notes ? `<div style="margin-top:4px;"><span class="panel-badge" style="font-size:10px;">Has notes</span></div>` : ""}
+            </div>
+        </div>
+    `).join("");
+}
+
+/**
+ * Fetch and render a page of customers on the dedicated /customers page.
+ *
+ * @param {boolean} resetPage - If true jump back to page 0.
+ */
+async function fetchCustomersFull(resetPage = false) {
+    const list = document.getElementById("customers-full-list");
+    if (!list) return;
+    if (resetPage) customersFullPage = 0;
+
+    const search = document.getElementById("cf-search")?.value.trim()  || "";
+    const status = document.getElementById("cf-status")?.value         || "";
+    const sortBy = document.getElementById("cf-sort")?.value           || "";
+
+    const params = new URLSearchParams();
+    if (search) params.append("search", search);
+    if (status) params.append("status", status);
+    if (sortBy) params.append("sort_by", sortBy);
+    params.append("limit",  PAGE_SIZE);
+    params.append("offset", customersFullPage * PAGE_SIZE);
+
+    setLoading(true);
+    try {
+        const customers = await handleJsonResponse(
+            await fetch(`/api/customers?${params.toString()}`)
+        );
+        renderCustomersFull(customers);
+        updatePaginationInfo("cf-page-info", customersFullPage, customers.length);
+
+        const prevBtn = document.getElementById("cf-prev-btn");
+        const nextBtn = document.getElementById("cf-next-btn");
+        if (prevBtn) prevBtn.disabled = customersFullPage === 0;
+        if (nextBtn) nextBtn.disabled = customers.length < PAGE_SIZE;
+    } catch (err) {
+        showToast(err.message, true);
+    } finally {
+        setLoading(false);
+    }
 }
 
 /**
@@ -949,7 +1089,7 @@ function renderCustomerDetail(customer, transactions = []) {
     const statusClass  = customer.is_active ? "status-active" : "status-inactive";
     const statusLabel  = customer.is_active ? "Active" : "Inactive";
     // Use warning colour for low balances, success for healthy ones.
-    const balanceColour = customer.balance < 250
+    const balanceColour = customer.balance < 25000
         ? "var(--warning)" : "var(--success)";
 
     customerDetailPanel.innerHTML = `
@@ -964,7 +1104,7 @@ function renderCustomerDetail(customer, transactions = []) {
                 </div>
             </div>
             <div style="text-align:right;flex-shrink:0;">
-                <div style="font-size:22px;font-weight:800;color:${balanceColour};">£${customer.balance.toLocaleString()}</div>
+                <div style="font-size:22px;font-weight:800;color:${balanceColour};">${fmt(customer.balance)}</div>
                 <span class="status-pill ${statusClass}" style="margin-top:4px;">${statusLabel}</span>
             </div>
         </div>
@@ -1001,15 +1141,15 @@ function renderCustomerDetail(customer, transactions = []) {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--border);">
             <div style="padding:10px 14px;text-align:center;border-right:1px solid var(--border);">
                 <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--success);margin-bottom:3px;">Total Deposited</div>
-                <div style="font-size:15px;font-weight:700;color:var(--success);">£${totalDeposits.toLocaleString()}</div>
+                <div style="font-size:15px;font-weight:700;color:var(--success);">${fmt(totalDeposits)}</div>
             </div>
             <div style="padding:10px 14px;text-align:center;border-right:1px solid var(--border);">
                 <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--warning);margin-bottom:3px;">Total Withdrawn</div>
-                <div style="font-size:15px;font-weight:700;color:var(--warning);">£${totalWithdraws.toLocaleString()}</div>
+                <div style="font-size:15px;font-weight:700;color:var(--warning);">${fmt(totalWithdraws)}</div>
             </div>
             <div style="padding:10px 14px;text-align:center;">
                 <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--info);margin-bottom:3px;">Total Transferred</div>
-                <div style="font-size:15px;font-weight:700;color:var(--info);">£${totalTransfers.toLocaleString()}</div>
+                <div style="font-size:15px;font-weight:700;color:var(--info);">${fmt(totalTransfers)}</div>
             </div>
         </div>
 
@@ -1108,31 +1248,37 @@ function renderTransactions(
     }
     targetElement.innerHTML = transactions.map((t) => {
         const type = t.transaction_type;
-        // Coloured dot class depends on transaction type.
         const dotClass = type === "deposit"  ? "txn-deposit"  :
                          type === "withdraw" ? "txn-withdraw" :
                          type === "transfer" ? "txn-transfer" : "txn-default";
-        // Amount sign colour class.
         const amtClass = type === "deposit"  ? "deposit"  :
                          type === "withdraw" ? "withdraw" :
                          type === "transfer" ? "transfer" : "";
-        // Build a "From #X → To #Y" label from the customer IDs.
         const fromTo = [
             t.from_customer_id ? `From #${t.from_customer_id}` : null,
             t.to_customer_id   ? `To #${t.to_customer_id}`     : null
         ].filter(Boolean).join(" → ");
+        const riskClass = t.risk_flag ? "risk-flagged" : "";
+        // Store minimal fields needed for the detail modal in data attrs.
+        const dataJson = escapeHtml(JSON.stringify({
+            id: t.id, type, amount: t.amount, description: t.description,
+            from_id: t.from_customer_id, to_id: t.to_customer_id,
+            created_at: t.created_at, risk_flag: t.risk_flag,
+            account_number: t.account_number
+        }));
         return `
-        <div class="transaction-row">
+        <div class="transaction-row clickable ${riskClass}"
+             data-txn="${dataJson}" title="Click for details">
             <div class="txn-type-dot ${dotClass}" aria-hidden="true"></div>
             <div class="txn-content">
                 <div class="txn-header">
                     <span class="status-pill ${transactionStatusClass(type)}">${escapeHtml(type)}</span>
-                    ${t.risk_flag ? '<span class="flag-chip">&#9888; Flagged</span>' : ""}
+                    ${t.risk_flag ? '<span class="flag-chip">&#9888; Risk</span>' : ""}
                     <span class="txn-desc">${escapeHtml(t.description || "—")}</span>
                 </div>
                 <div class="txn-sub">${escapeHtml(fromTo || "—")} &middot; ${escapeHtml(formatDateTime(t.created_at))}</div>
             </div>
-            <div class="txn-amount ${amtClass}">${type === "deposit" ? "+" : type === "withdraw" ? "−" : ""}£${t.amount.toLocaleString()}</div>
+            <div class="txn-amount ${amtClass}">${type === "deposit" ? "+" : type === "withdraw" ? "−" : ""}${fmt(t.amount)}</div>
         </div>`;
     }).join("");
 }
@@ -1146,12 +1292,22 @@ async function fetchTransactions(resetPage = false) {
     if (!transactionList) return;
     if (resetPage) transactionsPage = 0;
 
-    const account = document.getElementById("transaction-account-filter")?.value.trim() || "";
-    const type    = document.getElementById("transaction-type-filter")?.value || "";
+    const account    = document.getElementById("transaction-account-filter")?.value.trim() || "";
+    const type       = document.getElementById("transaction-type-filter")?.value || "";
+    const risk       = document.getElementById("transaction-risk-filter")?.value || "";
+    const amountMin  = document.getElementById("transaction-amount-min")?.value || "";
+    const amountMax  = document.getElementById("transaction-amount-max")?.value || "";
+    const dateFrom   = document.getElementById("transaction-date-from")?.value || "";
+    const dateTo     = document.getElementById("transaction-date-to")?.value || "";
 
     const params = new URLSearchParams();
-    if (account) params.append("account_number",    account);
-    if (type)    params.append("transaction_type", type);
+    if (account)   params.append("account_number",    account);
+    if (type)      params.append("transaction_type",  type);
+    if (risk)      params.append("risk_flag",         risk);
+    if (amountMin) params.append("amount_min",        amountMin);
+    if (amountMax) params.append("amount_max",        amountMax);
+    if (dateFrom)  params.append("date_from",         dateFrom);
+    if (dateTo)    params.append("date_to",           dateTo);
     params.append("limit",  PAGE_SIZE);
     params.append("offset", transactionsPage * PAGE_SIZE);
 
@@ -1255,17 +1411,21 @@ function renderAuditLogs(logs) {
     auditList.innerHTML = logs.map((log) => {
         const isSuccess = log.result === "success";
         const isFailure = log.result === "failure";
-        // Coloured dot and chip classes based on result.
         const dotClass  = isSuccess ? "audit-result-success" :
                           isFailure ? "audit-result-failure"  : "audit-result-other";
         const chipClass = isSuccess ? "chip-success" :
                           isFailure ? "chip-failure"  : "chip-other";
+        const dataJson = escapeHtml(JSON.stringify({
+            id: log.id, event_type: log.event_type, actor: log.actor,
+            details: log.details, result: log.result,
+            ip_address: log.ip_address, created_at: log.created_at
+        }));
         return `
-        <div class="audit-row">
+        <div class="audit-row clickable" data-audit="${dataJson}" title="Click for full details">
             <div class="audit-result-dot ${dotClass}" aria-hidden="true"></div>
             <div class="audit-content">
                 <div class="audit-event">${escapeHtml(log.event_type)}</div>
-                <div class="audit-detail" title="${escapeHtml(log.details)}">${escapeHtml(log.details)}</div>
+                <div class="audit-detail">${escapeHtml(log.details)}</div>
                 <div class="audit-sub">${escapeHtml(log.actor)} &middot; ${escapeHtml(log.ip_address || "—")} &middot; ${escapeHtml(formatDateTime(log.created_at))}</div>
             </div>
             <span class="audit-result-chip ${chipClass}">${escapeHtml(log.result)}</span>
@@ -1416,10 +1576,15 @@ function renderStaffUsers(users) {
                 ${lockOverlay}
             </div>
             <div class="staff-info">
-                <div class="staff-name">${escapeHtml(user.username)}</div>
+                <div class="staff-name">
+                    <a href="/staff/${user.id}" style="color:inherit;text-decoration:none;font-weight:700;">
+                        ${escapeHtml(user.username)}
+                    </a>
+                </div>
                 <div class="staff-sub">
                     Joined ${escapeHtml(formatDateTime(user.created_at))}
                     ${user.failed_login_attempts > 0 ? `&middot; ${user.failed_login_attempts} failed attempt${user.failed_login_attempts !== 1 ? "s" : ""}` : ""}
+                    ${user.last_login_at ? `&middot; Last login ${escapeHtml(formatDateTime(user.last_login_at))}` : ""}
                     ${user.must_change_password ? "&middot; <em>password change required</em>" : ""}
                 </div>
             </div>
@@ -1428,6 +1593,8 @@ function renderStaffUsers(users) {
                 ${user.is_locked ? `<span class="status-pill status-locked">Locked</span>` : ""}
                 ${canUnlock ? `<button type="button" class="success-btn" data-action="unlock-staff" data-id="${user.id}">Unlock</button>` : ""}
                 ${unlockBlockedMsg}
+                <a href="/staff/${user.id}" class="ghost-btn"
+                   style="text-decoration:none;padding:6px 12px;font-size:13px;min-height:0;">View</a>
             </div>
         </div>`;
     }).join("");
@@ -1442,10 +1609,36 @@ async function fetchStaffUsers() {
     if (!staffUserList || !isPrivileged()) return;
     try {
         const response = await fetch("/api/staff-users");
-        const users    = await handleJsonResponse(response);
+        let users = await handleJsonResponse(response);
+
+        // Client-side filter using the staff page toolbar controls (if present).
+        const searchVal = document.getElementById("staff-search-input")?.value.trim().toLowerCase() || "";
+        const roleVal   = document.getElementById("staff-role-filter")?.value  || "";
+        const lockVal   = document.getElementById("staff-lock-filter")?.value  || "";
+
+        if (searchVal) users = users.filter(u => u.username.toLowerCase().includes(searchVal));
+        if (roleVal)   users = users.filter(u => u.role === roleVal);
+        if (lockVal === "locked") users = users.filter(u => u.is_locked);
+        if (lockVal === "active") users = users.filter(u => !u.is_locked);
+
         renderStaffUsers(users);
     } catch (error) { showMessage(error.message, true); }
 }
+
+// Wire staff filter buttons (only on the staff page — guard with element check).
+document.getElementById("staff-filter-btn")?.addEventListener("click", () => fetchStaffUsers());
+document.getElementById("staff-clear-btn")?.addEventListener("click", () => {
+    const si = document.getElementById("staff-search-input");
+    const rf = document.getElementById("staff-role-filter");
+    const lf = document.getElementById("staff-lock-filter");
+    if (si) si.value = "";
+    if (rf) rf.value = "";
+    if (lf) lf.value = "";
+    fetchStaffUsers();
+});
+document.getElementById("staff-search-input")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") fetchStaffUsers();
+});
 
 /**
  * Show a confirmation modal then unlock the given staff account.
@@ -1607,6 +1800,7 @@ async function deactivateCustomer(customerId) {
                 );
                 showToast("Customer deactivated successfully.");
                 fetchCustomers();
+                fetchCustomersFull();
                 fetchAuditLogs();
                 fetchDashboardSummary();
                 fetchChartData();
@@ -1634,6 +1828,7 @@ async function reactivateCustomer(customerId) {
                 );
                 showToast("Customer activated successfully.");
                 fetchCustomers();
+                fetchCustomersFull();
                 fetchAuditLogs();
                 fetchDashboardSummary();
                 fetchChartData();
@@ -1669,6 +1864,7 @@ async function deleteCustomer(customerId) {
                 );
                 showToast("Customer deleted successfully.");
                 fetchCustomers();
+                fetchCustomersFull();
                 fetchAuditLogs();
                 fetchDashboardSummary();
                 fetchChartData();
@@ -1793,6 +1989,17 @@ document.getElementById("transactions-next-btn")?.addEventListener("click", () =
     fetchTransactions();
 });
 
+/* Transactions clear-filter button (dedicated transactions page) */
+document.getElementById("clear-transactions-btn")?.addEventListener("click", () => {
+    ["transaction-account-filter","transaction-type-filter","transaction-risk-filter",
+     "transaction-amount-min","transaction-amount-max",
+     "transaction-date-from","transaction-date-to"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+    });
+    fetchTransactions(true);
+});
+
 // ---------------------------------------------------------------------------
 // Form: create customer
 // ---------------------------------------------------------------------------
@@ -1800,7 +2007,7 @@ customerForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const full_name = document.getElementById("full_name").value.trim();
     const email     = document.getElementById("email").value.trim();
-    const balance   = parseInt(document.getElementById("balance").value, 10);
+    const balance   = Math.round(parseFloat(document.getElementById("balance").value) * 100);
     const notes     = document.getElementById("notes")?.value.trim() || null;
     if (!full_name || !email || Number.isNaN(balance)) {
         showMessage("Full name, email, and opening balance are required.", true);
@@ -1861,7 +2068,11 @@ editCustomerForm?.addEventListener("submit", async (event) => {
         fetchAuditLogs();
         fetchDashboardSummary();
         // Reload the detail panel with fresh data.
-        await viewCustomer(customerId);
+        if (document.getElementById("customer-profile-page")) {
+            refreshCustomerProfile();
+        } else {
+            await viewCustomer(customerId);
+        }
     } catch (error) { showEditMessage(error.message, true); }
     finally { setLoading(false); }
 });
@@ -1872,7 +2083,7 @@ editCustomerForm?.addEventListener("submit", async (event) => {
 depositForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const account_number = document.getElementById("deposit-account").value.trim();
-    const amount         = parseInt(document.getElementById("deposit-amount").value, 10);
+    const amount         = Math.round(parseFloat(document.getElementById("deposit-amount").value) * 100);
     const description    = document.getElementById("deposit-description").value.trim();
     try {
         setLoading(true);
@@ -1890,6 +2101,7 @@ depositForm?.addEventListener("submit", async (event) => {
         fetchAuditLogs();
         fetchDashboardSummary();
         fetchChartData();
+        refreshCustomerProfile();
     } catch (error) { showToast(error.message, true); }
     finally { setLoading(false); }
 });
@@ -1897,7 +2109,7 @@ depositForm?.addEventListener("submit", async (event) => {
 withdrawForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const account_number = document.getElementById("withdraw-account").value.trim();
-    const amount         = parseInt(document.getElementById("withdraw-amount").value, 10);
+    const amount         = Math.round(parseFloat(document.getElementById("withdraw-amount").value) * 100);
     const description    = document.getElementById("withdraw-description").value.trim();
     try {
         setLoading(true);
@@ -1915,6 +2127,7 @@ withdrawForm?.addEventListener("submit", async (event) => {
         fetchAuditLogs();
         fetchDashboardSummary();
         fetchChartData();
+        refreshCustomerProfile();
     } catch (error) { showToast(error.message, true); }
     finally { setLoading(false); }
 });
@@ -1923,12 +2136,13 @@ transferForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const from_account_number = document.getElementById("from_account_number").value.trim();
     const to_account_number   = document.getElementById("to_account_number").value.trim();
-    const amount              = parseInt(document.getElementById("transfer_amount").value, 10);
+    const amountPounds        = parseFloat(document.getElementById("transfer_amount").value) || 0;
+    const amount              = Math.round(amountPounds * 100);
     const description         = document.getElementById("transfer_description").value.trim();
     // Show a confirmation modal before submitting a transfer.
     openConfirmModal(
         "Confirm Transfer",
-        `Transfer £${amount || 0} from ${from_account_number || "source"} to ${to_account_number || "destination"}?`,
+        `Transfer £${amountPounds.toFixed(2)} from ${from_account_number || "source"} to ${to_account_number || "destination"}?`,
         async () => {
             try {
                 setLoading(true);
@@ -1951,6 +2165,7 @@ transferForm?.addEventListener("submit", async (event) => {
                 fetchAuditLogs();
                 fetchDashboardSummary();
                 fetchChartData();
+                refreshCustomerProfile();
             } catch (error) { showToast(error.message, true); }
             finally { setLoading(false); }
         }
@@ -2099,9 +2314,13 @@ exportTransactionsBtn?.addEventListener("click", async () => {
 // Initialisation IIFE — runs once on page load
 // ---------------------------------------------------------------------------
 (async () => {
-    // Only fetch auth data on pages that have a list panel
-    // (i.e. the dashboard, not the login page).
-    if (customerList || transactionList || auditList) {
+    // Fetch auth data whenever a list panel, the change-password form,
+    // or the customer profile page is present.  This covers the dashboard,
+    // staff, settings, and profile pages — but not the login page.
+    if (customerList || transactionList || auditList || changePasswordForm
+            || depositForm || document.getElementById("customer-profile-page")
+            || document.getElementById("alerts-page")
+            || document.getElementById("reports-page")) {
         await fetchCurrentUser();
         await fetchCsrfToken();
     }
@@ -2169,6 +2388,116 @@ staffUserList?.addEventListener("click", (event) => {
     if (isNaN(id)) return;
 
     if (action === "unlock-staff") unlockStaffUser(id);
+});
+
+// ---------------------------------------------------------------------------
+// Click-to-expand: transaction rows → detail modal
+// ---------------------------------------------------------------------------
+
+/**
+ * Build HTML for a transaction detail panel inside the info modal.
+ * @param {Object} t - Parsed transaction data from data-txn attribute.
+ * @returns {string} Safe HTML string.
+ */
+function _txnDetailHtml(t) {
+    const sign = t.type === "deposit" ? "+" : t.type === "withdraw" ? "−" : "";
+    const amtColor = t.type === "deposit" ? "var(--success)" :
+                     t.type === "withdraw" ? "var(--warning)" : "var(--info)";
+    return `
+        <div style="font-size:28px;font-weight:800;color:${amtColor};text-align:center;padding:12px 0 20px;">
+            ${sign}${fmt(t.amount)}
+        </div>
+        <div class="detail-grid">
+            <div class="detail-row"><span class="detail-key">ID</span><span class="detail-val">#${t.id}</span></div>
+            <div class="detail-row"><span class="detail-key">Type</span><span class="detail-val">${escapeHtml(t.type)}</span></div>
+            ${t.account_number ? `<div class="detail-row"><span class="detail-key">Account</span><span class="detail-val" style="font-family:ui-monospace,monospace;">${escapeHtml(t.account_number)}</span></div>` : ""}
+            <div class="detail-row"><span class="detail-key">From ID</span><span class="detail-val">${t.from_id ? `#${t.from_id}` : "—"}</span></div>
+            <div class="detail-row"><span class="detail-key">To ID</span><span class="detail-val">${t.to_id ? `#${t.to_id}` : "—"}</span></div>
+            <div class="detail-row"><span class="detail-key">Description</span><span class="detail-val">${escapeHtml(t.description || "—")}</span></div>
+            <div class="detail-row"><span class="detail-key">Date / Time</span><span class="detail-val">${escapeHtml(formatDateTime(t.created_at))}</span></div>
+            <div class="detail-row"><span class="detail-key">Risk Flag</span><span class="detail-val">${t.risk_flag ? '<span class="flag-chip">&#9888; Flagged</span>' : "None"}</span></div>
+        </div>`;
+}
+
+// Delegated listener: click any transaction row to open detail modal.
+// Works on both transactionList (dashboard/transactions page) and
+// customer-transactions-panel.
+document.addEventListener("click", (e) => {
+    const row = e.target.closest(".transaction-row.clickable");
+    if (!row || e.target.closest("button")) return;
+    try {
+        const t = JSON.parse(row.dataset.txn || "null");
+        if (!t) return;
+        openDetailModal(
+            `${t.type.charAt(0).toUpperCase() + t.type.slice(1)} — ${fmt(t.amount)}`,
+            _txnDetailHtml(t)
+        );
+    } catch (_) { /* malformed data — ignore */ }
+});
+
+// ---------------------------------------------------------------------------
+// Click-to-expand: audit rows → detail modal
+// ---------------------------------------------------------------------------
+
+/**
+ * Build HTML for an audit detail panel inside the info modal.
+ * @param {Object} log - Parsed audit data from data-audit attribute.
+ * @returns {string} Safe HTML string.
+ */
+function _auditDetailHtml(log) {
+    const isSuccess = log.result === "success";
+    const isFailure = log.result === "failure";
+    const chipClass = isSuccess ? "chip-success" : isFailure ? "chip-failure" : "chip-other";
+    return `
+        <div class="detail-grid">
+            <div class="detail-row"><span class="detail-key">Event</span><span class="detail-val" style="font-family:ui-monospace,monospace;font-size:12px;">${escapeHtml(log.event_type)}</span></div>
+            <div class="detail-row"><span class="detail-key">Result</span><span class="detail-val"><span class="audit-result-chip ${chipClass}">${escapeHtml(log.result)}</span></span></div>
+            <div class="detail-row"><span class="detail-key">Actor</span><span class="detail-val">${escapeHtml(log.actor)}</span></div>
+            <div class="detail-row"><span class="detail-key">Details</span><span class="detail-val">${escapeHtml(log.details)}</span></div>
+            <div class="detail-row"><span class="detail-key">IP Address</span><span class="detail-val" style="font-family:ui-monospace,monospace;">${escapeHtml(log.ip_address || "—")}</span></div>
+            <div class="detail-row"><span class="detail-key">Date / Time</span><span class="detail-val">${escapeHtml(formatDateTime(log.created_at))}</span></div>
+        </div>`;
+}
+
+// Delegated listener: click any audit row to open detail modal.
+document.addEventListener("click", (e) => {
+    const row = e.target.closest(".audit-row.clickable");
+    if (!row || e.target.closest("button")) return;
+    try {
+        const log = JSON.parse(row.dataset.audit || "null");
+        if (!log) return;
+        openDetailModal(`Audit Event — ${log.event_type}`, _auditDetailHtml(log));
+    } catch (_) { /* malformed — ignore */ }
+});
+
+// ---------------------------------------------------------------------------
+// Customer profile page — action buttons
+// ---------------------------------------------------------------------------
+
+(function initCustomerProfileActions() {
+    const page = document.getElementById("customer-profile-page");
+    if (!page) return;
+    const customerId = parseInt(page.dataset.customerId, 10);
+    if (isNaN(customerId)) return;
+
+    page.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-profile-action]");
+        if (!btn) return;
+        const action   = btn.dataset.profileAction;
+        const fullName = page.dataset.customerName || "this customer";
+        if (action === "deactivate") deactivateCustomer(customerId);
+        if (action === "reactivate") reactivateCustomer(customerId);
+        if (action === "delete")     deleteCustomer(customerId);
+        if (action === "export-csv") exportCustomerTransactions(customerId, fullName);
+    });
+})();
+
+/** Delegated listener for the locked-staff unlock buttons on the Alerts page. */
+document.getElementById("locked-staff-list")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("button.alerts-unlock-btn");
+    if (!btn) return;
+    const id = parseInt(btn.dataset.userId, 10);
+    if (!isNaN(id)) unlockFromAlerts(id);
 });
 
 // ---------------------------------------------------------------------------
@@ -2354,6 +2683,511 @@ window.unlockStaffUser = unlockStaffUser;
 })();
 
 // ---------------------------------------------------------------------------
+// Reports page
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch aggregated reports data and render charts + tables.
+ * Only runs when id="reports-page" is present.
+ */
+async function fetchReportsData() {
+    const sentinel = document.getElementById("reports-page");
+    if (!sentinel) return;
+
+    setLoading(true);
+    try {
+        const data = await handleJsonResponse(
+            await fetch("/api/reports")
+        );
+
+        // ---- Monthly volumes line chart ----
+        const monthlyCtx = document.getElementById("monthly-volumes-chart");
+        if (monthlyCtx && data.monthly_volumes) {
+            const labels  = data.monthly_volumes.map(r => r.month);
+            const amounts = data.monthly_volumes.map(r => r.total / 100);
+            const counts  = data.monthly_volumes.map(r => r.count);
+            if (window._monthlyChart) window._monthlyChart.destroy();
+            window._monthlyChart = new Chart(monthlyCtx, {
+                type: "line",
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: "Volume (£)",
+                            data: amounts,
+                            borderColor: "#3b82f6",
+                            backgroundColor: "rgba(59,130,246,0.08)",
+                            yAxisID: "y",
+                            tension: 0.3,
+                            fill: true,
+                        },
+                        {
+                            label: "Count",
+                            data: counts,
+                            borderColor: "#10b981",
+                            backgroundColor: "rgba(16,185,129,0.08)",
+                            yAxisID: "y1",
+                            tension: 0.3,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: "index", intersect: false },
+                    scales: {
+                        y:  { type: "linear", position: "left",  title: { display: true, text: "Volume (£)" } },
+                        y1: { type: "linear", position: "right", title: { display: true, text: "Count" }, grid: { drawOnChartArea: false } }
+                    },
+                    plugins: { legend: { position: "top" } }
+                }
+            });
+        }
+
+        // ---- Transaction type doughnut ----
+        const typeCtx = document.getElementById("type-breakdown-chart");
+        if (typeCtx && data.type_totals) {
+            if (window._typeChart) window._typeChart.destroy();
+            window._typeChart = new Chart(typeCtx, {
+                type: "doughnut",
+                data: {
+                    labels: data.type_totals.map(r => r.type),
+                    datasets: [{
+                        data: data.type_totals.map(r => r.total),
+                        backgroundColor: ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: "right" } }
+                }
+            });
+        }
+
+        // ---- Top customers table ----
+        const topEl = document.getElementById("top-customers-list");
+        if (topEl && data.top_customers) {
+            topEl.innerHTML = data.top_customers.length === 0
+                ? `<div class="customer-item"><p class="muted-text">No data.</p></div>`
+                : data.top_customers.map(c => `
+                    <div class="customer-item">
+                        <div class="customer-info">
+                            <strong>${c.full_name || "Unknown"}</strong>
+                            <span class="muted-text">${c.account_number}</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <strong>${fmt(Number(c.total_volume))}</strong>
+                            <span class="muted-text">${c.tx_count} txns</span>
+                        </div>
+                    </div>`).join("");
+        }
+
+        // ---- Risk summary stats ----
+        const riskEl = document.getElementById("risk-summary-box");
+        if (riskEl && data.risk_summary) {
+            const r = data.risk_summary;
+            riskEl.innerHTML = `
+                <div class="stat-item">
+                    <span class="stat-label">Risk-flagged transactions</span>
+                    <span class="stat-value" style="color:var(--danger)">${r.flagged_count}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total flagged value</span>
+                    <span class="stat-value">${fmt(r.flagged_amount || 0)}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">% of all transactions</span>
+                    <span class="stat-value">${r.flagged_pct ?? "0.0"}%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total transactions</span>
+                    <span class="stat-value">${r.total_count ?? 0}</span>
+                </div>`;
+        }
+
+        // ---- Risk doughnut chart ----
+        const riskChartCtx = document.getElementById("risk-chart");
+        if (riskChartCtx && data.risk_summary) {
+            const r = data.risk_summary;
+            const safe = (r.total_count || 0) - (r.flagged_count || 0);
+            if (window._riskChart) window._riskChart.destroy();
+            window._riskChart = new Chart(riskChartCtx, {
+                type: "doughnut",
+                data: {
+                    labels: ["Risk-flagged", "Clean"],
+                    datasets: [{
+                        data: [r.flagged_count || 0, safe],
+                        backgroundColor: ["#ef4444", "#10b981"],
+                        borderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: "bottom" },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ` ${ctx.label}: ${ctx.parsed} txns`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+    } catch (err) {
+        showToast(err.message, true);
+    } finally {
+        setLoading(false);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Alerts page
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch alerts (risk transactions + locked staff) and render the page.
+ * Only runs when id="alerts-page" is present.
+ */
+async function fetchAlerts() {
+    const sentinel = document.getElementById("alerts-page");
+    if (!sentinel) return;
+
+    setLoading(true);
+    try {
+        const data = await handleJsonResponse(
+            await fetch("/api/alerts")
+        );
+
+        // ---- Risk transactions ----
+        const riskEl = document.getElementById("risk-transactions-list");
+        if (riskEl) {
+            if (!data.risk_transactions || data.risk_transactions.length === 0) {
+                riskEl.innerHTML = `<div class="customer-item"><p class="muted-text">No risk-flagged transactions.</p></div>`;
+            } else {
+                riskEl.innerHTML = data.risk_transactions.map(t => `
+                    <div class="customer-item">
+                        <div class="customer-info">
+                            <strong>${t.account_number}</strong>
+                            <span class="badge badge-danger">RISK</span>
+                            <span class="muted-text">${t.transaction_type.toUpperCase()}</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <strong>${fmt(t.amount)}</strong>
+                            <span class="muted-text">${t.timestamp ? new Date(t.timestamp).toLocaleDateString("en-GB") : ""}</span>
+                        </div>
+                    </div>`).join("");
+            }
+        }
+
+        // ---- Locked staff ----
+        const lockedEl = document.getElementById("locked-staff-list");
+        if (lockedEl) {
+            if (!data.locked_staff || data.locked_staff.length === 0) {
+                lockedEl.innerHTML = `<div class="customer-item"><p class="muted-text">No locked accounts.</p></div>`;
+            } else {
+                lockedEl.innerHTML = data.locked_staff.map(u => `
+                    <div class="customer-item">
+                        <div class="customer-info">
+                            <strong>${u.username}</strong>
+                            <span class="badge badge-warning">${u.role}</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <span class="muted-text">${u.failed_login_attempts} failed attempts</span>
+                            <button class="ghost-btn alerts-unlock-btn" data-user-id="${u.id}" style="margin-left:8px;">Unlock</button>
+                        </div>
+                    </div>`).join("");
+            }
+        }
+
+        // Update badge counts
+        const riskBadge   = document.getElementById("alerts-risk-count");
+        const lockedBadge = document.getElementById("alerts-locked-count");
+        if (riskBadge)   riskBadge.textContent   = data.risk_transactions.length;
+        if (lockedBadge) lockedBadge.textContent = data.locked_staff.length;
+
+    } catch (err) {
+        showToast(err.message, true);
+    } finally {
+        setLoading(false);
+    }
+}
+
+/**
+ * Unlock a staff account from the Alerts page.
+ * @param {number} userId
+ */
+async function unlockFromAlerts(userId) {
+    try {
+        await handleJsonResponse(
+            await fetch(`/api/staff-users/${userId}/unlock`, { method: "PATCH" })
+        );
+        showToast("Account unlocked.");
+        fetchAlerts();
+    } catch (err) {
+        showToast(err.message, true);
+    }
+}
+
+// Auto-init reports and alerts pages
+if (document.getElementById("reports-page")) fetchReportsData();
+if (document.getElementById("alerts-page"))  fetchAlerts();
+
+// ---------------------------------------------------------------------------
+// Staff profile page auto-init
+// ---------------------------------------------------------------------------
+
+(async function initStaffProfile() {
+    const page = document.getElementById("staff-profile-page");
+    if (!page) return;
+
+    const userId   = parseInt(page.dataset.userId, 10);
+    const username = page.dataset.username || "";
+    if (isNaN(userId) || !username) return;
+
+    // ── Login history: audit logs filtered to login events for this user ──
+    const loginHistoryEl = document.getElementById("sp-login-history");
+    // ── Full audit trail: all actions by this user ──
+    const auditListEl    = document.getElementById("sp-audit-list");
+
+    async function loadStaffAudit() {
+        try {
+            const params = new URLSearchParams({ actor: username, limit: 100 });
+            const logs   = await handleJsonResponse(
+                await fetch(`/api/audit-logs?${params}`)
+            );
+
+            // Login-specific events
+            const loginEvents = logs.filter(l =>
+                l.event_type === "login_success" || l.event_type === "login_failed"
+            ).slice(0, 10);
+
+            if (loginHistoryEl) {
+                if (!loginEvents.length) {
+                    loginHistoryEl.innerHTML =
+                        `<div class="audit-item"><p class="muted-text">No login events found.</p></div>`;
+                } else {
+                    loginHistoryEl.innerHTML = loginEvents.map((log) => {
+                        const ok = log.result === "success";
+                        return `
+                        <div class="audit-row">
+                            <div class="audit-result-dot ${ok ? "audit-result-success" : "audit-result-failure"}" aria-hidden="true"></div>
+                            <div class="audit-content">
+                                <div class="audit-event">${escapeHtml(log.event_type)}</div>
+                                <div class="audit-sub">${escapeHtml(log.ip_address || "—")} &middot; ${escapeHtml(formatDateTime(log.created_at))}</div>
+                            </div>
+                            <span class="audit-result-chip ${ok ? "chip-success" : "chip-failure"}">${escapeHtml(log.result)}</span>
+                        </div>`;
+                    }).join("");
+                }
+            }
+
+            // Full audit trail (all events, clickable for detail)
+            if (auditListEl) {
+                if (!logs.length) {
+                    auditListEl.innerHTML =
+                        `<div class="audit-item"><p class="muted-text">No audit events found for this user.</p></div>`;
+                } else {
+                    auditListEl.innerHTML = logs.map((log) => {
+                        const isSuccess = log.result === "success";
+                        const isFailure = log.result === "failure";
+                        const dotClass  = isSuccess ? "audit-result-success" :
+                                          isFailure ? "audit-result-failure"  : "audit-result-other";
+                        const chipClass = isSuccess ? "chip-success" :
+                                          isFailure ? "chip-failure"  : "chip-other";
+                        const dataJson = escapeHtml(JSON.stringify({
+                            id: log.id, event_type: log.event_type, actor: log.actor,
+                            details: log.details, result: log.result,
+                            ip_address: log.ip_address, created_at: log.created_at
+                        }));
+                        return `
+                        <div class="audit-row clickable" data-audit="${dataJson}" title="Click for details">
+                            <div class="audit-result-dot ${dotClass}" aria-hidden="true"></div>
+                            <div class="audit-content">
+                                <div class="audit-event">${escapeHtml(log.event_type)}</div>
+                                <div class="audit-detail">${escapeHtml(log.details)}</div>
+                                <div class="audit-sub">${escapeHtml(log.ip_address || "—")} &middot; ${escapeHtml(formatDateTime(log.created_at))}</div>
+                            </div>
+                            <span class="audit-result-chip ${chipClass}">${escapeHtml(log.result)}</span>
+                        </div>`;
+                    }).join("");
+                }
+            }
+        } catch (err) {
+            showToast(err.message, true);
+        }
+    }
+
+    await loadStaffAudit();
+
+    // Unlock button
+    document.getElementById("sp-unlock-btn")?.addEventListener("click", async () => {
+        try {
+            await handleJsonResponse(
+                await fetch(`/api/staff-users/${userId}/unlock`, { method: "PATCH" })
+            );
+            showToast("Account unlocked.");
+            // Reload the page to reflect the updated status.
+            window.location.reload();
+        } catch (err) {
+            showToast(err.message, true);
+        }
+    });
+})();
+
+// ---------------------------------------------------------------------------
+// Dedicated Customers page — event wiring
+// ---------------------------------------------------------------------------
+
+if (document.getElementById("customers-page")) {
+    // New Customer modal open/close
+    const ncModal  = document.getElementById("new-customer-modal");
+    const openNcModal  = () => { ncModal?.classList.remove("hidden"); document.getElementById("full_name")?.focus(); };
+    const closeNcModal = () => ncModal?.classList.add("hidden");
+    document.getElementById("new-customer-btn")?.addEventListener("click", openNcModal);
+    document.getElementById("nc-modal-close")?.addEventListener("click", closeNcModal);
+    document.getElementById("nc-modal-cancel")?.addEventListener("click", closeNcModal);
+    ncModal?.addEventListener("click", (e) => { if (e.target === ncModal) closeNcModal(); });
+
+    // After a customer is successfully created, close the modal and refresh.
+    // The existing customer-form submit handler calls fetchCustomers() which
+    // no-ops here; hook a MutationObserver on the #message element instead.
+    const msgEl = document.getElementById("message");
+    if (msgEl) {
+        new MutationObserver(() => {
+            if (msgEl.textContent && !msgEl.style.color.includes("crimson")) {
+                closeNcModal();
+                fetchCustomersFull();
+            }
+        }).observe(msgEl, { childList: true, characterData: true, subtree: true });
+    }
+
+    // Initial load
+    fetchCustomersFull();
+
+    // Search / filter buttons
+    document.getElementById("cf-search-btn")?.addEventListener("click", () => fetchCustomersFull(true));
+    document.getElementById("cf-clear-btn")?.addEventListener("click", () => {
+        const s = document.getElementById("cf-search");
+        const st = document.getElementById("cf-status");
+        const so = document.getElementById("cf-sort");
+        if (s)  s.value  = "";
+        if (st) st.value = "";
+        if (so) so.value = "";
+        fetchCustomersFull(true);
+    });
+    document.getElementById("cf-export-btn")?.addEventListener("click", () => {
+        exportFile("/api/export/customers", "customers.csv")
+            .then(() => showToast("Customers exported."))
+            .catch(() => showToast("Export failed — check your permissions.", true));
+    });
+
+    // Enter key in search box
+    document.getElementById("cf-search")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") fetchCustomersFull(true);
+    });
+
+    // Pagination
+    document.getElementById("cf-prev-btn")?.addEventListener("click", () => {
+        if (customersFullPage > 0) { customersFullPage--; fetchCustomersFull(); }
+    });
+    document.getElementById("cf-next-btn")?.addEventListener("click", () => {
+        customersFullPage++; fetchCustomersFull();
+    });
+
+    // Delegated action buttons (edit / deactivate / activate / delete)
+    document.getElementById("customers-full-list")?.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-cf-action]");
+        if (!btn) return;
+        const action = btn.dataset.cfAction;
+        const id     = parseInt(btn.dataset.id, 10);
+        if (isNaN(id)) return;
+
+        if (action === "deactivate") deactivateCustomer(id);
+        if (action === "activate")   reactivateCustomer(id);
+        if (action === "delete")     deleteCustomer(id);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Customer profile page auto-init
+// ---------------------------------------------------------------------------
+
+(async function initCustomerProfile() {
+    const page = document.getElementById("customer-profile-page");
+    if (!page) return;
+
+    const customerId = parseInt(page.dataset.customerId, 10);
+    if (isNaN(customerId)) return;
+
+    // Fetch the customer record to get the account number, then load
+    // transactions (which filter by account number) and the timeline.
+    try {
+        const customer = await handleJsonResponse(
+            await fetch(`/api/customers/${customerId}`)
+        );
+        fetchTransactionsForCustomer(customer.account_number);
+        fetchCustomerTimeline(customerId);
+    } catch (err) {
+        showToast(err.message, true);
+    }
+})();
+
+// ---------------------------------------------------------------------------
+// Customer profile — live refresh after transactions / edits
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-fetch the customer record and update the live elements on the
+ * customer profile page (balance, edit-form fields, transactions list,
+ * timeline).  Safe to call from any page — returns immediately when
+ * #customer-profile-page is not present.
+ */
+async function refreshCustomerProfile() {
+    const page = document.getElementById("customer-profile-page");
+    if (!page) return;
+    const customerId = parseInt(page.dataset.customerId, 10);
+    if (isNaN(customerId)) return;
+    try {
+        const customer = await handleJsonResponse(
+            await fetch(`/api/customers/${customerId}`)
+        );
+        // Update hero balance display
+        const balEl = document.getElementById("cp-balance-display");
+        if (balEl) {
+            balEl.textContent = `£${(customer.balance / 100).toFixed(2)}`;
+            balEl.style.color = customer.balance < 25000 ? "var(--warning)" : "var(--success)";
+        }
+        // Update hero name
+        const nameEl = document.getElementById("cp-name-display");
+        if (nameEl) nameEl.textContent = customer.full_name;
+        // Keep edit form in sync
+        const editName  = document.getElementById("edit-full-name");
+        const editEmail = document.getElementById("edit-email");
+        const editNotes = document.getElementById("edit-notes");
+        if (editName)  editName.value  = customer.full_name;
+        if (editEmail) editEmail.value = customer.email;
+        if (editNotes) editNotes.value = customer.notes || "";
+        // Refresh the read-only notes display panel
+        const notesDisplay = document.getElementById("cp-notes-display");
+        if (notesDisplay) {
+            if (customer.notes) {
+                notesDisplay.innerHTML = `<div style="background:var(--primary-light);border-left:3px solid var(--primary);
+                    border-radius:var(--radius-sm);padding:12px 14px;line-height:1.6;
+                    white-space:pre-wrap;font-size:14px;">${customer.notes.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>`;
+            } else {
+                notesDisplay.innerHTML = `<p class="muted-text" style="padding:8px 0;">No notes recorded for this customer.</p>`;
+            }
+        }
+        // Reload transactions and timeline panels
+        fetchTransactionsForCustomer(customer.account_number);
+        fetchCustomerTimeline(customerId);
+    } catch (_) {
+        // Silent — primary action already showed a toast
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Last-login timestamp formatting
 // ---------------------------------------------------------------------------
 
@@ -2387,6 +3221,13 @@ const lastLoginEl = document.getElementById("last-login-ts");
 if (lastLoginEl && lastLoginEl.dataset.iso) {
     lastLoginEl.textContent = formatRelativeTime(lastLoginEl.dataset.iso);
 }
+
+// ---------------------------------------------------------------------------
+// Error page — "Go Back" button (CSP-safe, no inline onclick)
+// ---------------------------------------------------------------------------
+document.querySelector(".go-back-btn")?.addEventListener("click", () => {
+    history.back();
+});
 
 // Dark mode is initialised at the top of this file (search for
 // initDarkMode) so it runs before any other code can fail.

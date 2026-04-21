@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Help | SecureBank{% endblock %}
+{% block page_title %}Help & Documentation{% endblock %}
+{% block content %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1100px;">
+
+    <!-- Roles & Permissions -->
+    <div class="panel-card" style="padding:24px;">
+        <h3 style="margin:0 0 16px;font-size:16px;">Roles &amp; Permissions</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+                <span class="status-pill status-superadmin">sysadmin</span>
+                <p style="margin:6px 0 0;font-size:13px;color:var(--muted);">Full access — manage staff, purge audit logs, all manager actions.</p>
+            </div>
+            <div>
+                <span class="status-pill status-manager">manager</span>
+                <p style="margin:6px 0 0;font-size:13px;color:var(--muted);">Create/edit/delete customers, manage transactions, export CSV, view all data.</p>
+            </div>
+            <div>
+                <span class="status-pill status-active">staff</span>
+                <p style="margin:6px 0 0;font-size:13px;color:var(--muted);">View customers and transactions. Cannot create, edit, or delete records.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customers -->
+    <div class="panel-card" style="padding:24px;">
+        <h3 style="margin:0 0 16px;font-size:16px;">Managing Customers</h3>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px;">
+            <li>Use the <strong>Dashboard</strong> to create new customers and view the full list.</li>
+            <li>Click <strong>View</strong> on a customer row to open their full profile — transactions, balance chart, notes, and timeline.</li>
+            <li>Click <strong>Edit</strong> to update name, email, or notes.</li>
+            <li>Use <strong>Deactivate / Activate</strong> to suspend or reinstate accounts without deleting data.</li>
+            <li>The <strong>Export CSV</strong> button in the customer profile downloads all their transactions.</li>
+            <li>Customers with a balance below £2.50 are flagged as <span style="color:var(--warning);">low balance</span>.</li>
+        </ul>
+    </div>
+
+    <!-- Transactions -->
+    <div class="panel-card" style="padding:24px;">
+        <h3 style="margin:0 0 16px;font-size:16px;">Transactions</h3>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px;">
+            <li><strong>Deposit</strong> — adds funds to a customer account.</li>
+            <li><strong>Withdraw</strong> — removes funds from a customer account.</li>
+            <li><strong>Transfer</strong> — moves funds between two customer accounts.</li>
+            <li>Transactions of <strong>£10 or more</strong> are automatically risk-flagged and appear in <a href="/alerts" style="color:var(--primary);">Alerts</a>.</li>
+            <li>Use the <a href="/transactions" style="color:var(--primary);">Transactions page</a> to filter by date range, type, and amount.</li>
+        </ul>
+    </div>
+
+    <!-- Audit Log -->
+    <div class="panel-card" style="padding:24px;">
+        <h3 style="margin:0 0 16px;font-size:16px;">Audit Log</h3>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px;">
+            <li>Every action — login, customer change, transaction, export — is recorded automatically.</li>
+            <li>Use the <a href="/audit" style="color:var(--primary);">Audit Log page</a> to filter by actor, event type, result, or date range.</li>
+            <li>Sysadmins can purge entries older than a chosen number of days.</li>
+            <li>Audit logs cannot be edited — they are append-only.</li>
+        </ul>
+    </div>
+
+    <!-- Staff Management -->
+    <div class="panel-card" style="padding:24px;">
+        <h3 style="margin:0 0 16px;font-size:16px;">Staff Management</h3>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px;">
+            <li>Only <strong>managers</strong> and <strong>sysadmins</strong> can access the <a href="/staff" style="color:var(--primary);">Staff page</a>.</li>
+            <li>Accounts are automatically locked after <strong>3 consecutive failed login attempts</strong>.</li>
+            <li>Locked accounts are shown with a red badge and sorted to the top of the list.</li>
+            <li>Use the <strong>Unlock</strong> button to restore access.</li>
+            <li>New staff are created with a temporary password and must change it on first login.</li>
+        </ul>
+    </div>
+
+    <!-- Exports & Reports -->
+    <div class="panel-card" style="padding:24px;">
+        <h3 style="margin:0 0 16px;font-size:16px;">Exports &amp; Reports</h3>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px;">
+            <li>Export all customers or all transactions as CSV from the Dashboard.</li>
+            <li>Export a single customer's transactions using the <strong>Export CSV</strong> button in their profile.</li>
+            <li>The <a href="/reports" style="color:var(--primary);">Reports page</a> shows monthly transaction volumes, top customers, and type breakdowns.</li>
+            <li>All exports are logged in the audit trail.</li>
+        </ul>
+    </div>
+
+    <!-- Security -->
+    <div class="panel-card" style="padding:24px;">
+        <h3 style="margin:0 0 16px;font-size:16px;">Security</h3>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px;">
+            <li>Sessions expire after <strong>20 minutes</strong> of inactivity. A warning appears at 18 minutes.</li>
+            <li>All passwords are hashed with PBKDF2-SHA256.</li>
+            <li>CSRF tokens protect every state-changing request.</li>
+            <li>Content-Security-Policy headers prevent XSS and clickjacking.</li>
+            <li>Change your password any time from <a href="/settings" style="color:var(--primary);">Settings</a>.</li>
+        </ul>
+    </div>
+
+    <!-- Keyboard shortcuts -->
+    <div class="panel-card" style="padding:24px;">
+        <h3 style="margin:0 0 16px;font-size:16px;">Tips</h3>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px;">
+            <li>Use the <strong>Dark mode</strong> button in the footer to switch themes. Preference is saved automatically.</li>
+            <li>The customer search box on the Dashboard supports live suggestions as you type.</li>
+            <li>The <strong>Customer Detail</strong> section has its own search to quickly find any customer by name or account number.</li>
+            <li>Balance history charts are generated automatically when you view a customer with transactions.</li>
+        </ul>
+    </div>
+
+</div>
+
+{% endblock %}

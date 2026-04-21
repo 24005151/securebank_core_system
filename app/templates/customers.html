@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Customers | SecureBank{% endblock %}
+{% block page_title %}Customers{% endblock %}
+{% block content %}
+
+<div id="customers-page">
+
+    <div class="panel-card">
+        <div class="panel-header">
+            <h3>All Customers</h3>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <span class="panel-badge">Directory</span>
+                {% if user and user.role in ['manager', 'superadmin'] %}
+                <button id="new-customer-btn" type="button" class="primary-btn"
+                        style="padding:6px 14px;font-size:13px;min-height:0;">
+                    + New Customer
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="toolbar-card">
+            <input type="text" id="cf-search"
+                   placeholder="Search name, email, account…" aria-label="Search customers">
+            <select id="cf-status" aria-label="Filter by status">
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+            </select>
+            <select id="cf-sort" aria-label="Sort by">
+                <option value="">Newest First</option>
+                <option value="name_asc">Name A–Z</option>
+                <option value="balance_desc">Balance ↓</option>
+                <option value="balance_asc">Balance ↑</option>
+            </select>
+            <button id="cf-search-btn"  type="button" class="primary-btn">Search</button>
+            <button id="cf-clear-btn"   type="button" class="ghost-btn">Clear</button>
+            <button id="cf-export-btn"  type="button" class="ghost-btn">Export CSV</button>
+        </div>
+
+        <div id="customers-full-list" class="table-card"></div>
+
+        <div class="toolbar-card single-toolbar" style="margin-top:10px;">
+            <button id="cf-prev-btn" type="button" class="ghost-btn">&#8592; Prev</button>
+            <span id="cf-page-info" class="muted-text" style="padding:0 10px;">Page 1</span>
+            <button id="cf-next-btn" type="button" class="ghost-btn">Next &#8594;</button>
+        </div>
+    </div>
+
+</div>
+
+{# ── New Customer modal ── #}
+<div id="new-customer-modal" class="modal-overlay hidden"
+     role="dialog" aria-modal="true" aria-labelledby="nc-modal-title">
+    <div class="modal-card modal-card--wide">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h3 id="nc-modal-title" style="margin:0;">New Customer</h3>
+            <button id="nc-modal-close" type="button" class="ghost-btn"
+                    style="padding:6px 10px;min-height:0;min-width:0;" aria-label="Close">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+
+        <form id="customer-form">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="full_name">Full Name</label>
+                    <input type="text" id="full_name" maxlength="100" required autocomplete="off"
+                           placeholder="Alice Johnson">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" maxlength="120" required autocomplete="off"
+                           placeholder="alice@example.com">
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:16px;">
+                <label for="balance">Opening Balance (£)</label>
+                <input type="number" id="balance" min="0" step="0.01" value="0.00" required placeholder="e.g. 500.00">
+            </div>
+
+            <div class="form-group">
+                <label for="notes">
+                    Notes
+                    <span class="field-help" style="display:inline;margin-left:4px;">(optional)</span>
+                </label>
+                <textarea id="notes" maxlength="500" rows="3"
+                          placeholder="Contact preferences, special circumstances…"
+                          autocomplete="off"></textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                <button type="button" id="nc-modal-cancel" class="ghost-btn">Cancel</button>
+                <button type="submit" class="primary-btn">Create Customer</button>
+            </div>
+        </form>
+
+        <p id="message" class="status-message"></p>
+    </div>
+</div>
+
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+</div>
+
+{% endblock %}

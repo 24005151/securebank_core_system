@@ -206,6 +206,20 @@ def seed_default_staff_user(db: Session):
         db.add(sysadmin)
         db.commit()
 
+    # --- Gbisley (superadmin) ---
+    existing_gbisley = db.query(models.StaffUser).filter(
+        models.StaffUser.username == "Gbisley"
+    ).first()
+    if not existing_gbisley:
+        gbisley = models.StaffUser(
+            username="Gbisley",
+            password=hash_password("woLIP2m@ga5r"),
+            role="superadmin",
+            must_change_password=True
+        )
+        db.add(gbisley)
+        db.commit()
+
 
 # ---------------------------------------------------------------------------
 # Staff user management
@@ -217,6 +231,15 @@ def get_all_staff_users(db: Session):
         db.query(models.StaffUser)
         .order_by(models.StaffUser.id.asc())
         .all()
+    )
+
+
+def get_staff_user_by_id(db: Session, user_id: int):
+    """Return the staff user with the given primary key, or None."""
+    return (
+        db.query(models.StaffUser)
+        .filter(models.StaffUser.id == user_id)
+        .first()
     )
 
 
@@ -719,6 +742,130 @@ def get_chart_data(db: Session):
 
 
 # ---------------------------------------------------------------------------
+# Reports
+# ---------------------------------------------------------------------------
+
+def get_reports_data(db: Session) -> dict:
+    """Return aggregated data for the Reports page.
+
+    Returns:
+        monthly_volumes  — last 12 months of deposit/withdraw/transfer
+                           totals (amount in pence, count of transactions).
+        top_customers    — top 5 customers by total transaction volume.
+        type_totals      — sum of amounts per transaction type.
+        risk_summary     — count and total of risk-flagged transactions.
+    """
+    # Monthly volumes — group by YYYY-MM using strftime
+    monthly_raw = (
+        db.query(
+            func.strftime("%Y-%m", models.Transaction.created_at).label("month"),
+            models.Transaction.transaction_type,
+            func.count(models.Transaction.id).label("count"),
+            func.sum(models.Transaction.amount).label("total"),
+        )
+        .group_by("month", models.Transaction.transaction_type)
+        .order_by("month")
+        .all()
+    )
+    # Build monthly aggregates: sum across all types per month
+    monthly_agg: dict = {}
+    for row in monthly_raw:
+        m = row.month or "unknown"
+        if m not in monthly_agg:
+            monthly_agg[m] = {"total": 0, "count": 0}
+        monthly_agg[m]["total"] += int(row.total or 0)
+        monthly_agg[m]["count"] += int(row.count or 0)
+    monthly_volumes = [
+        {"month": m, "total": v["total"], "count": v["count"]}
+        for m, v in sorted(monthly_agg.items())
+    ]
+
+    # Top 5 customers by total transaction volume (sent + received)
+    customer_tx_counts: dict = {}
+    for c in db.query(models.Customer).all():
+        sent = (
+            db.query(func.sum(models.Transaction.amount))
+            .filter(models.Transaction.from_customer_id == c.id)
+            .scalar() or 0
+        )
+        received = (
+            db.query(func.sum(models.Transaction.amount))
+            .filter(models.Transaction.to_customer_id == c.id)
+            .scalar() or 0
+        )
+        tx_count = (
+            db.query(func.count(models.Transaction.id))
+            .filter(
+                (models.Transaction.from_customer_id == c.id)
+                | (models.Transaction.to_customer_id == c.id)
+            )
+            .scalar() or 0
+        )
+        total_volume = int(sent) + int(received)
+        if total_volume > 0:
+            customer_tx_counts[c.id] = {
+                "id": c.id,
+                "full_name": c.full_name,
+                "account_number": c.account_number,
+                "total_volume": total_volume,
+                "tx_count": tx_count,
+            }
+    top_customers = sorted(
+        customer_tx_counts.values(),
+        key=lambda x: x["total_volume"],
+        reverse=True
+    )[:5]
+
+    # Total amounts per transaction type — list form for Chart.js
+    type_totals = [
+        {
+            "type": txn_type,
+            "count": (
+                db.query(func.count(models.Transaction.id))
+                .filter(models.Transaction.transaction_type == txn_type)
+                .scalar() or 0
+            ),
+            "total": int(
+                db.query(func.sum(models.Transaction.amount))
+                .filter(models.Transaction.transaction_type == txn_type)
+                .scalar() or 0
+            ),
+        }
+        for txn_type in ("deposit", "withdraw", "transfer")
+    ]
+
+    # Risk summary
+    total_tx = (
+        db.query(func.count(models.Transaction.id)).scalar() or 0
+    )
+    flagged_count = (
+        db.query(func.count(models.Transaction.id))
+        .filter(models.Transaction.risk_flag.is_(True))
+        .scalar() or 0
+    )
+    flagged_amount = int(
+        db.query(func.sum(models.Transaction.amount))
+        .filter(models.Transaction.risk_flag.is_(True))
+        .scalar() or 0
+    )
+    flagged_pct = (
+        round(flagged_count / total_tx * 100, 1) if total_tx > 0 else 0.0
+    )
+
+    return {
+        "monthly_volumes": monthly_volumes,
+        "top_customers": top_customers,
+        "type_totals": type_totals,
+        "risk_summary": {
+            "flagged_count": flagged_count,
+            "flagged_amount": flagged_amount,
+            "flagged_pct": flagged_pct,
+            "total_count": total_tx,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Customer queries
 # ---------------------------------------------------------------------------
 
@@ -1024,24 +1171,15 @@ def get_all_transactions(
     db: Session,
     account_number: str | None = None,
     transaction_type: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    amount_min: int | None = None,
+    amount_max: int | None = None,
+    risk_flag: bool | None = None,
     limit: int = 50,
     offset: int = 0
 ):
-    """Return a paginated list of transactions with optional filters.
-
-    Args:
-        db:               Active database session.
-        account_number:   If provided, return only transactions
-                          where the customer with this account
-                          is either the sender or receiver.
-        transaction_type: Optional filter: 'deposit', 'withdraw',
-                          or 'transfer'.
-        limit:            Maximum number of records to return.
-        offset:           Records to skip for pagination.
-
-    Returns:
-        List of Transaction ORM objects, newest first.
-    """
+    """Return a paginated list of transactions with optional filters."""
     query = db.query(models.Transaction)
 
     if transaction_type:
@@ -1054,14 +1192,46 @@ def get_all_transactions(
             db, account_number.strip()
         )
         if not customer:
-            # Unknown account number — return empty list rather
-            # than an error so the UI can show "no results".
             return []
         query = query.filter(
             or_(
                 models.Transaction.from_customer_id == customer.id,
                 models.Transaction.to_customer_id == customer.id
             )
+        )
+
+    if date_from:
+        try:
+            from_dt = datetime.fromisoformat(date_from)
+            query = query.filter(
+                models.Transaction.created_at >= from_dt
+            )
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            to_dt = datetime.fromisoformat(date_to)
+            to_dt = to_dt.replace(hour=23, minute=59, second=59)
+            query = query.filter(
+                models.Transaction.created_at <= to_dt
+            )
+        except ValueError:
+            pass
+
+    if amount_min is not None:
+        query = query.filter(
+            models.Transaction.amount >= amount_min
+        )
+
+    if amount_max is not None:
+        query = query.filter(
+            models.Transaction.amount <= amount_max
+        )
+
+    if risk_flag is not None:
+        query = query.filter(
+            models.Transaction.risk_flag == risk_flag
         )
 
     return (

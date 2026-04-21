@@ -1,138 +1,155 @@
-# SecureBank Core System — Changelog & GitHub Upload Guide
+# SecureBank Core System — Changelog
 
 ---
 
-## What Was Changed (This Update)
+## Latest Update (v14)
 
-This update is a major overhaul covering security hardening, new features, UI/UX redesign, accessibility improvements, and role-based access control.
-
----
-
-## Files to Upload to GitHub
-
-### New Files (not yet tracked)
-| File | Purpose |
-|---|---|
-| `.env.example` | Template for environment variables — safe to commit, contains no secrets |
-| `app/limiter.py` | Isolated rate-limiter module (avoids circular imports) |
-| `app/utils.py` | Shared utility: `get_client_ip()` helper |
-| `CHANGELOG.md` | This file |
-
-### Modified Files
-| File | What Changed |
-|---|---|
-| `requirements.txt` | Added `python-dotenv`, `slowapi` |
-| `app/models.py` | Added `must_change_password` column to `StaffUser`; replaced deprecated `datetime.utcnow` |
-| `app/schemas.py` | Added `StaffUserCreate`, `PasswordChangeRequest`; added `must_change_password` to response; `superadmin` role allowed |
-| `app/crud.py` | Full rewrite — pagination, search guard, staff create/unlock/password-change, CSV audit trail, audit log purge, superadmin unlock rules, seeded `admin2` and `sysadmin` users |
-| `app/security.py` | Timing-safe API key check, CSRF token generation/validation, per-request DB session re-validation, `superadmin` role, `require_superadmin_or_api_key` dependency |
-| `app/main.py` | `load_dotenv()`, `SESSION_SECRET_KEY` from env, `HTTPS_ONLY` env var, `SecurityHeadersMiddleware` (CSP, X-Frame-Options, etc.), rate limiter registration |
-| `app/routes/auth.py` | Rate-limited login, session stores `id`+`role`+`must_change_password`, CSRF token issued on login, `/api/auth/csrf-token` endpoint |
-| `app/routes/api.py` | Pagination on all list endpoints, CSRF protection on all mutating endpoints, staff create/unlock/change-password endpoints, CSV export with audit trail, audit log purge endpoint, superadmin enforcement |
-| `app/static/css/style.css` | Full redesign — fintech aesthetic, SVG icon support, compact data rows, metric card icons, login page layout, dark mode, reduced-motion, print styles, `superadmin` role pill |
-| `app/static/js/app.js` | CSRF fetch interceptor, pagination, 30s auto-refresh, staff create/password-change forms, accessibility (aria, keyboard nav, focus management), new compact row renderers, `isPrivileged()`/`isSuperadmin()` helpers, first-login password-change redirect |
-| `app/templates/base.html` | SVG nav icons, user avatar initials, sign-out icon, `body_class` block for login page |
-| `app/templates/index.html` | Metric cards with icon wrappers, improved form labels, audit purge section, `loading-overlay` moved inside block |
-| `app/templates/login.html` | Full-screen gradient layout, branded header, role access info panel, hides sidebar/topbar via `login-page` body class |
-
-### Do NOT Upload
-| File | Reason |
-|---|---|
-| `.env` | Contains your real `API_KEY` and `SESSION_SECRET_KEY` — **never commit this** |
-| `securebank.db` | SQLite database — contains user data, not source code |
-| `venv/` | Python virtual environment — recreated with `pip install -r requirements.txt` |
-| `__pycache__/` | Python bytecode — auto-generated |
+Fixed several bugs introduced when the customer profile page was split off from the dashboard. The core issue was that the CSRF token and session initialisation only ran on pages that had a customer list or transaction list — so any page without those elements (profile page, alerts, reports) never fetched the token and all mutating requests failed silently.
 
 ---
 
-## Summary of All Improvements Made
+## Bug Fixes — v14
 
-### Security
-- **API key hardened** — removed hardcoded `"Devilcat1988"`, now loaded from `.env` via `API_KEY` env var
-- **Session secret hardened** — `SESSION_SECRET_KEY` loaded from `.env`, app refuses to start if missing
-- **Timing-safe comparison** — `hmac.compare_digest` used for API key and CSRF token checks (prevents timing attacks)
-- **CSRF protection** — double-submit token pattern on all mutating endpoints (POST/PUT/PATCH/DELETE); skipped for API key auth
-- **Rate limiting** — `slowapi` limits login to 10 attempts per minute per IP
-- **Security headers** — `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options`, `Referrer-Policy`, `X-XSS-Protection` added via middleware
-- **Session re-validation** — every authenticated request re-checks the database; locked accounts are immediately ejected
-- **Username enumeration fixed** — locked accounts return the same generic error as invalid credentials
-- **IP spoofing hardened** — `get_client_ip()` uses `request.client.host` only, ignores `X-Forwarded-For`
-- **HTTPS support** — `HTTPS_ONLY` env var controls secure cookie flag for production deployments
-- **Session stored user ID** — fixes password-change ownership check that was previously broken
+### Customer Profile — Deposit, Withdraw and Notes All Broken
+All three forms on the customer profile page were failing because `fetchCsrfToken()` was never called there. The init IIFE only ran when `customerList`, `transactionList`, `auditList`, or `changePasswordForm` were in the DOM — none of which exist on the profile page. Every POST was rejected by the CSRF middleware before it even reached the endpoint.
 
-### Features Added
-- **Pagination** — all list endpoints support `limit`/`offset`; Prev/Next buttons in the UI
-- **Staff user management** — create staff users, change passwords (with strength validation), unlock locked accounts
-- **Superadmin role** — new role above manager; only superadmin can unlock manager/superadmin accounts
-- **Must-change-password flag** — new staff and seeded demo accounts are flagged; UI redirects to password form on first login
-- **CSV export audit trail** — exporting customers/transactions now logs an audit entry
-- **Audit log purge** — manager-only endpoint to delete logs older than N days
-- **Auto-refresh** — dashboard stats and charts refresh every 30 seconds
-- **30s CSRF token fetch** — token fetched on page load and injected automatically into all mutating requests
+Fixed by expanding the init condition to also trigger when `depositForm` or `#customer-profile-page` is present.
 
-### Data Protection
-- **Credentials in `.env`** — API key and session secret moved out of source code
-- **`.env.example`** — documents required variables with generation instructions; safe to commit
-- **Documented limitations** — SQLite race condition (TOCTOU on balances) and demo password risks documented in `.env.example`
+### Notes Display Not Updating After Save
+The edit customer form saved notes correctly to the database, but `refreshCustomerProfile()` was only syncing the edit textarea — it wasn't rebuilding the read-only notes panel (`#cp-notes-display`) that sits at the top of the page. So after saving a note, the display stayed stale until a full page reload. Fixed by adding a DOM rebuild for that panel inside `refreshCustomerProfile()`.
 
-### UI / Visual Redesign
-- **Fintech aesthetic** — clean white cards, consistent spacing, multi-layer shadows, hover lifts
-- **SVG icons** — all sidebar navigation links have inline SVG icons
-- **Metric cards** — icon wrappers in colour-coded rounded squares replace the old static progress bars
-- **Compact data rows** — customers, transactions, audit logs, and staff users are now horizontal rows (avatar → details → status/actions) instead of stacked paragraphs
-- **Transaction amounts** — colour-coded with +/− prefix (green deposits, orange withdrawals, teal transfers)
-- **Audit log rows** — monospace event name, result dot, actor/IP/time on one line, result chip
-- **Login page** — full-screen gradient, hides sidebar entirely, branded header with role access info panel
-- **Hero panel** — gradient banner with decorative background circles
-- **Dark mode** — full dark palette updated to match all new components
-- **Reduced motion** — all animations disabled via `prefers-reduced-motion` media query
-- **Print styles** — sidebar hidden, cards borderless
+### Alerts Page — 500 Internal Server Error
+`/api/alerts` was crashing on every request. The endpoint was accessing `t.account_number` and `t.timestamp` on Transaction objects — neither of those columns exist. Transactions link to customers via `from_customer` and `to_customer` ORM relationships, and the timestamp column is `created_at`. Fixed by deriving the account number from the relationship (`t.to_customer or t.from_customer`) and switching to `t.created_at`.
 
-### Accessibility (WCAG 2.1 AA)
-- **Skip link** — "Skip to main content" visible on focus
-- **Focus rings** — `:focus-visible` with 2.5px solid blue outline; mouse users unaffected
-- **ARIA roles** — `role="dialog"`, `aria-modal`, `aria-labelledby` on modal; `aria-live` on toast container and login message
-- **Touch targets** — all buttons minimum 44×44px
-- **Keyboard navigation** — suggestion dropdown supports ArrowUp/ArrowDown/Escape
-- **`aria-busy`** — set on `<body>` during loading
-- **Semantic HTML** — `<main>`, `<nav>`, `<header>`, `<aside>` used correctly; heading hierarchy fixed
-- **Form attributes** — `autocomplete`, `aria-required`, `aria-describedby` on login fields
+### Alerts and Reports Pages Missing CSRF Token
+Same root cause as the profile page issue — unlock buttons on the alerts page make PATCH requests that need a CSRF token, but the token was never fetched on that page. Added `alerts-page` and `reports-page` to the init IIFE condition.
 
-### User Accounts (seeded)
+---
+
+## v13 — Currency, Role Fixes and Code Reorganisation
+
+### All Amounts Now Display in Pounds
+Every balance and transaction amount throughout the app was showing pence as pounds (e.g. £4100 instead of £41.00). Added a `fmt(pence)` helper function and applied it to all 16 currency display points across the dashboard, customer list, transaction list, detail modals, and reports. Amount inputs on all forms now accept decimal pounds (e.g. `£23.43`) and convert to pence via `Math.round(parseFloat * 100)` before sending to the API.
+
+### Role Name Fixed Throughout — sysadmin → superadmin
+The database stores `superadmin` but templates and routes were checking for `sysadmin` in around a dozen places. This meant superadmin users were silently blocked from all manager-only UI sections — the Staff sidebar link, Reports and Alerts pages, profile action buttons, and staff profile actions. Fixed everywhere: templates, `pages.py` route guards, and the staff filter dropdown.
+
+### Server-Side Route Guards Added
+The `/staff`, `/reports`, and `/alerts` page routes were only checking authentication, not role. Any staff member could navigate directly to those URLs. Added `role not in ("manager", "superadmin")` checks that return a 403.
+
+### Password Change Fixed
+The change-password form on the settings page was broken — `fetchCurrentUser()` and `fetchCsrfToken()` only ran when list panels were present, so the user ID was never populated and the CSRF token was never fetched. Fixed by adding `changePasswordForm` to the init condition.
+
+### API Reorganised Into Domain Modules
+`app/routes/api.py` was a single 815-line file. Split into eight focused modules under `app/routes/endpoints/`:
+- `dashboard.py` — health check, dashboard summary, chart data
+- `customers.py` — all customer CRUD endpoints
+- `transactions.py` — deposit, withdraw, transfer, transaction list
+- `audit.py` — audit log fetch and purge
+- `staff.py` — staff user management
+- `exports.py` — CSV export endpoints
+- `reports.py` — reports data
+- `alerts.py` — alerts and locked accounts
+
+`api.py` is now a 30-line combiner that includes all the routers.
+
+### Reports Risk Chart Fixed
+The risk summary panel was text-only. Added a Chart.js doughnut chart alongside the stats showing flagged vs clean transactions — red for flagged, green for clean.
+
+### CSP Violations Fixed in Error Pages
+The 403 and 404 error pages had `onclick="history.back()"` which is blocked by the `script-src 'self'` Content-Security-Policy. Replaced with a `class="go-back-btn"` and wired up via delegated event listener in app.js.
+
+### Reports and Alerts Sidebar Gating
+The Reports and Alerts sidebar links were visible to all staff but the pages themselves were manager-only. Added `{% if user.role in ['manager', 'superadmin'] %}` checks to the base template so the links only show for the right roles.
+
+### New Superadmin Account — Gbisley
+Created a seeded superadmin account for Gbisley with `must_change_password=True`. Will be prompted to set a new password on first login.
+
+---
+
+## v12 — Security Overhaul and Full UI Rebuild
+
+### Customer Profile — Account Actions
+Added proper account management to each customer profile page. Previously it was a read-only view. You can now deposit, withdraw, transfer funds, and edit customer details all from the profile. After any transaction or edit, the balance in the hero card updates live without a page reload.
+
+### New Pages
+Built dedicated pages for everything rather than cramming it onto the dashboard:
+- `/customers` — full customer directory with search, filter, sort, pagination, and a New Customer modal
+- `/customers/{id}` — individual customer profile with all account actions
+- `/transactions` — full transaction log with click-to-expand detail rows
+- `/audit` — audit trail with full event detail modals
+- `/staff` — staff management with create user, change password, unlock
+- `/staff/{id}` — individual staff profile with login history
+- `/reports` — monthly volume chart, transaction type breakdown, top customers, risk summary
+- `/alerts` — risk-flagged transactions and locked accounts with unlock buttons
+- `/settings` — settings page with password change
+- `/help` — accessible without login
+
+### Security Hardening
+- API key moved to `.env` (`API_KEY`), removed hardcoded value
+- Session secret from `.env` (`SESSION_SECRET_KEY`), app won't start without it
+- Timing-safe comparisons via `hmac.compare_digest` for API key and CSRF token
+- CSRF double-submit token pattern on all POST/PUT/PATCH/DELETE requests
+- Rate limiting on login — 10 attempts per minute per IP via `slowapi`
+- Security headers middleware — CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options`, `Referrer-Policy`
+- Session re-validation on every authenticated request — locked accounts are ejected immediately
+- Username enumeration fixed — locked accounts return the same error as wrong credentials
+- IP handling via `request.client.host` only — ignores `X-Forwarded-For` to prevent spoofing
+
+### Other Features
+- Pagination on all list endpoints with Prev/Next UI
+- Staff management — create, unlock, change passwords with strength validation
+- Must-change-password flow — new accounts redirect to the password form on first login
+- CSV export with audit log entry
+- Audit log purge endpoint
+- Auto-refresh on dashboard every 30 seconds
+
+---
+
+## Test Accounts
+
 | Username | Password | Role | Notes |
 |---|---|---|---|
 | `admin` | `Admin123` | manager | Must change password on first login |
 | `staff1` | `Staff123` | staff | Must change password on first login |
 | `admin2` | `Watford88` | manager | No forced password change |
 | `sysadmin` | `Sysadmin1` | superadmin | Must change password on first login |
+| `Gbisley` | `woLIP2m@ga5r` | superadmin | Must change password on first login |
+
+---
+
+## Files — What Not to Commit
+
+| File | Why |
+|---|---|
+| `.env` | Contains your real `API_KEY` and `SESSION_SECRET_KEY` |
+| `securebank.db` | SQLite database — has real user data |
+| `venv/` | Python virtual environment |
+| `__pycache__/` | Auto-generated bytecode |
+
+The `.env.example` is safe to commit — placeholder values only.
 
 ---
 
 ## How to Run
 
 ```bash
-# 1. Copy environment template and fill in values
 cp .env.example .env
-# Edit .env — generate secrets with:
-# python3 -c "import secrets; print(secrets.token_hex(32))"
+# Fill in API_KEY and SESSION_SECRET_KEY
+# Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
 
-# 2. Install dependencies
 pip install -r requirements.txt
-
-# 3. Start the application
 uvicorn app.main:app --reload
-
-# 4. Open in browser
-# http://localhost:8000
+# Open http://localhost:8000
 ```
 
 ---
 
-## Known Limitations (Documented)
+## Known Limitations
 
 | Issue | Severity | Notes |
 |---|---|---|
-| SQLite race condition on balance | Medium | Two simultaneous withdrawals may both succeed; use PostgreSQL with `SELECT FOR UPDATE` in production |
-| Demo passwords are predictable | High | `admin`/`staff1`/`sysadmin` are flagged `must_change_password=True`; change immediately in any real deployment |
-| No HTTPS in dev mode | — | Set `HTTPS_ONLY=true` in `.env` when running behind TLS in production |
-| No GDPR erasure on audit logs | Low | Use the audit log purge endpoint (`DELETE /api/audit-logs?days=N`) to manage retention |
+| SQLite race condition on balance | Medium | Two simultaneous withdrawals can both go through. Use PostgreSQL with `SELECT FOR UPDATE` in production |
+| Demo passwords are predictable | High | Seed accounts are flagged `must_change_password=True` — change them before deploying |
+| No HTTPS in dev | — | Set `HTTPS_ONLY=true` in `.env` when running behind TLS |
+| No GDPR erasure on audit logs | Low | Use `DELETE /api/audit-logs?days=N` to manage retention |
