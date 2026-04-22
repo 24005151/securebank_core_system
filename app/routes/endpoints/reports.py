@@ -1,7 +1,8 @@
 """
 Reports endpoint (manager+ only).
 
-    GET /api/reports — monthly volumes, top customers, type totals, risk summary.
+    GET /api/reports — monthly volumes, top customers,
+                       type totals, risk summary.
 """
 
 from fastapi import APIRouter, Depends

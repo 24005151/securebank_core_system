@@ -4,10 +4,10 @@ Staff user management endpoints.
     GET   /api/staff-users                       — list all (manager+).
     POST  /api/staff-users                       — create account (manager+).
     PATCH /api/staff-users/{id}/unlock           — unlock account (manager+).
-    POST  /api/staff-users/{id}/change-password  — change password (ownership rules).
+    POST  /api/staff-users/{id}/change-password  — change password.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app import crud, schemas
@@ -54,7 +54,9 @@ def create_staff_user(
     session_user = auth.get("user")
     actor = session_user["username"] if session_user else "api_key_client"
     # API key callers are treated as superadmin-equivalent.
-    actor_role = session_user.get("role", "staff") if session_user else "superadmin"
+    actor_role = (
+        session_user.get("role", "staff") if session_user else "superadmin"
+    )
 
     if payload.role == "superadmin" and actor_role != "superadmin":
         raise HTTPException(
@@ -88,7 +90,9 @@ def unlock_staff_user(
     """
     session_user = auth.get("user")
     actor = session_user["username"] if session_user else "api_key_client"
-    actor_role = session_user.get("role", "staff") if session_user else "superadmin"
+    actor_role = (
+        session_user.get("role", "staff") if session_user else "superadmin"
+    )
 
     user, error = crud.unlock_staff_user(
         db, user_id, actor=actor, actor_role=actor_role,

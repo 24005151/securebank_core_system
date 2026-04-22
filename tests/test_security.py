@@ -13,7 +13,7 @@ Risk Register mapping:
     R003 — Privilege escalation         (test_staff_cannot_access_audit_logs)
     R004 — XSS / injection via CSP      (test_content_security_policy_header)
     R005 — Clickjacking                 (test_x_frame_options_header)
-    R006 — CSRF attacks                 (test_mutation_without_csrf_returns_403)
+    R006 — CSRF attacks             (test_mutation_without_csrf_returns_403)
     R008 — Missing security headers     (test_security_headers_*)
 """
 
@@ -51,7 +51,7 @@ def test_x_xss_protection_header(any_response):
 
 
 def test_content_security_policy_header(any_response):
-    """CSP must restrict script sources to 'self' — blocks inline XSS (R004)."""
+    """CSP must restrict script sources to 'self' — blocks XSS (R004)."""
     csp = any_response.headers.get("content-security-policy", "")
     assert "default-src 'self'" in csp
     assert "script-src 'self'" in csp
@@ -60,7 +60,7 @@ def test_content_security_policy_header(any_response):
 def test_csp_blocks_unsafe_inline_scripts(any_response):
     """CSP must NOT contain 'unsafe-inline' in script-src (would allow XSS)."""
     csp = any_response.headers.get("content-security-policy", "")
-    # Extract script-src directive only, not style-src (which allows unsafe-inline)
+    # Extract script-src only — style-src intentionally allows unsafe-inline
     script_src = next(
         (d for d in csp.split(";") if "script-src" in d), ""
     )
@@ -148,7 +148,7 @@ def test_manager_can_read_staff_users(auth_client):
 # ---------------------------------------------------------------------------
 
 def test_mutation_without_csrf_returns_403(auth_client):
-    """POST to a mutating endpoint without X-CSRF-Token must return 403 (R006)."""
+    """POST without X-CSRF-Token must return 403 (R006)."""
     # Deliberately omit the CSRF header — should be rejected.
     response = auth_client.post(
         "/api/customers",

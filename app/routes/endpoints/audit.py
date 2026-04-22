@@ -37,7 +37,8 @@ def read_audit_logs(
 
     Restricted to manager and superadmin accounts only.
     ``date_from`` and ``date_to`` accept ISO date strings (YYYY-MM-DD).
-    ``date_to`` is treated as end-of-day so all events on that date are included.
+    ``date_to`` is treated as end-of-day so all events on that date
+    are included.
     """
     return crud.get_all_audit_logs(
         db,
@@ -71,5 +72,7 @@ def purge_audit_logs(
         db, days=days, actor=actor, ip_address=get_client_ip(request)
     )
     return {
-        "message": f"Deleted {deleted} audit log entries older than {days} days."
+        "message": (
+            f"Deleted {deleted} audit log entries older than {days} days."
+        )
     }

@@ -126,7 +126,8 @@ def update_customer(
     """Update a customer's name, email, and notes (manager+ only)."""
     actor = auth["user"]["username"] if auth["user"] else "api_key_client"
     customer, error = crud.update_customer(
-        db, customer_id, payload, actor=actor, ip_address=get_client_ip(request)
+        db, customer_id, payload,
+        actor=actor, ip_address=get_client_ip(request)
     )
     if error:
         raise HTTPException(status_code=400, detail=error)

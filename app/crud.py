@@ -758,7 +758,9 @@ def get_reports_data(db: Session) -> dict:
     # Monthly volumes — group by YYYY-MM using strftime
     monthly_raw = (
         db.query(
-            func.strftime("%Y-%m", models.Transaction.created_at).label("month"),
+            func.strftime(
+                "%Y-%m", models.Transaction.created_at
+            ).label("month"),
             models.Transaction.transaction_type,
             func.count(models.Transaction.id).label("count"),
             func.sum(models.Transaction.amount).label("total"),
@@ -1634,7 +1636,7 @@ def export_customer_transactions_csv(
     Returns:
         CSV text as a string, or None if customer not found.
     """
-    customer = get_customer(db, customer_id)
+    customer = get_customer_by_id(db, customer_id)
     if customer is None:
         return None
 

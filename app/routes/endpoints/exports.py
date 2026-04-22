@@ -35,7 +35,9 @@ def export_customers(
     return PlainTextResponse(
         csv_text,
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="customers.csv"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="customers.csv"'
+        },
     )
 
 
@@ -53,7 +55,9 @@ def export_transactions(
     return PlainTextResponse(
         csv_text,
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="transactions.csv"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="transactions.csv"'
+        },
     )
 
 
@@ -70,7 +74,8 @@ def export_customer_transactions(
     """
     actor = auth["user"]["username"] if auth["user"] else "api_key_client"
     csv_text = crud.export_customer_transactions_csv(
-        db, customer_id=customer_id, actor=actor, ip_address=get_client_ip(request)
+        db, customer_id=customer_id,
+        actor=actor, ip_address=get_client_ip(request)
     )
     if csv_text is None:
         raise HTTPException(status_code=404, detail="Customer not found.")
@@ -78,7 +83,9 @@ def export_customer_transactions(
         csv_text,
         media_type="text/csv",
         headers={
-            "Content-Disposition":
-                f'attachment; filename="customer_{customer_id}_transactions.csv"'
+            "Content-Disposition": (
+                "attachment; "
+                f'filename="customer_{customer_id}_transactions.csv"'
+            ),
         },
     )

@@ -13,7 +13,7 @@ I verify:
 Risk Register mapping:
     R001 — Authentication bypass       (test_wrong_password_rejected)
     R002 — Brute force / lockout       (test_account_locks_after_failures)
-    R003 — Username enumeration        (test_locked_account_returns_generic_error)
+    R003 — Username enumeration    (test_locked_account_returns_generic_error)
     R007 — Session integrity           (test_logout_clears_session)
 """
 
@@ -79,10 +79,10 @@ def test_wrong_password_returns_generic_message(client):
 
 
 def test_unknown_username_returns_generic_message(client):
-    """Unknown username must return the same message as wrong password (R003)."""
+    """Unknown username returns the same message as wrong password (R003)."""
     response = client.post(
         "/api/auth/login",
-        json={"username": "nonexistentuser999", "password": "anything"}
+        json={"username": "nonexistentuser999", "password": "anything"},
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid username or password."

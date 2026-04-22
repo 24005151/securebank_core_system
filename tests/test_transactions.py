@@ -15,7 +15,7 @@ Risk Register mapping:
     R011 — Insufficient fund handling  (test_withdraw_insufficient_funds)
     R012 — Duplicate / invalid txns    (test_self_transfer_rejected)
     R013 — Risk flag accuracy          (test_large_deposit_sets_risk_flag)
-    R014 — Inactive account controls   (test_deposit_inactive_account_rejected)
+    R014 — Inactive account controls (test_deposit_inactive_account_rejected)
 """
 
 import pytest
@@ -194,7 +194,7 @@ def test_withdrawal_decreases_balance(client, api_headers, test_account):
 
 
 def test_withdraw_insufficient_funds(client, api_headers, test_account):
-    """Withdrawal exceeding balance must be rejected — balance unchanged (R011)."""
+    """Withdrawal over balance must be rejected — balance unchanged (R011)."""
     current_balance = client.get(
         f"/api/customers/{test_account['id']}", headers=api_headers
     ).json()["balance"]

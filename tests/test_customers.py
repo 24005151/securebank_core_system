@@ -165,7 +165,7 @@ def test_duplicate_email_rejected(client, api_headers):
 
 
 def test_create_customer_single_name_rejected(client, api_headers):
-    """Full name with only one word must be rejected (R009 — input validation)."""
+    """Single-word name must be rejected — input validation (R009)."""
     response = client.post(
         "/api/customers",
         json={
@@ -179,7 +179,7 @@ def test_create_customer_single_name_rejected(client, api_headers):
 
 
 def test_create_customer_negative_balance_rejected(client, api_headers):
-    """Negative opening balance must be rejected by schema validation (R009)."""
+    """Negative opening balance must be rejected by schema (R009)."""
     response = client.post(
         "/api/customers",
         json={

@@ -23,21 +23,27 @@ def read_alerts(db: Session = Depends(get_db)):
     Returns the 50 most recent risk-flagged transactions plus all
     currently locked staff accounts.
     """
-    risk_txns = crud.get_all_transactions(db, risk_flag=True, limit=50, offset=0)
-    locked_staff = [u for u in crud.get_all_staff_users(db) if u.is_locked]
+    risk_txns = crud.get_all_transactions(
+        db, risk_flag=True, limit=50, offset=0
+    )
+    locked_staff = [
+        u for u in crud.get_all_staff_users(db) if u.is_locked
+    ]
     return {
         "risk_transactions": [
             {
                 "id": t.id,
-                # Transactions link via customer relationships, not a direct
-                # account_number column.  Use whichever customer end is set.
+                # account_number lives on the related customer object,
+                # not directly on the transaction row.
                 "account_number": (
                     (t.to_customer or t.from_customer).account_number
                     if (t.to_customer or t.from_customer) else "—"
                 ),
                 "transaction_type": t.transaction_type,
                 "amount": t.amount,
-                "timestamp": t.created_at.isoformat() if t.created_at else None,
+                "timestamp": (
+                    t.created_at.isoformat() if t.created_at else None
+                ),
                 "description": t.description,
             }
             for t in risk_txns
