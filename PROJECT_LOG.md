@@ -641,7 +641,7 @@ Sessions where investigative, diagnostic, or planning work was carried out but n
 ### 21 April 2026 — Code Quality, Security Audit and Repository Clean-up
 
 **Date:** 21 April 2026
-**Time:** Session conducted during morning
+**Time:** 10:28 BST
 **Conducted by:** Gareth Bisley
 
 **Purpose:** Full code quality review, PEP 8 compliance pass, security audit of all source files and git history, and repository clean-up.
