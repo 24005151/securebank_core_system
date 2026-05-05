@@ -638,6 +638,53 @@ Sessions where investigative, diagnostic, or planning work was carried out but n
 
 ---
 
+### 21 April 2026 — Code Quality, Security Audit and Repository Clean-up
+
+**Date:** 21 April 2026
+**Time:** Session conducted during morning
+**Conducted by:** Gareth Bisley
+
+**Purpose:** Full code quality review, PEP 8 compliance pass, security audit of all source files and git history, and repository clean-up.
+
+**Work covered:**
+
+*PEP 8 compliance:*
+- Ran flake8 across all `app/` and `tests/` files with `--max-line-length=79`
+- Found and resolved 25 line-length violations across `crud.py`, `alerts.py`, `audit.py`, `customers.py`, `exports.py`, `reports.py`, `staff.py`, and all test files
+- Removed unused import (`status`) from `staff.py`
+- Fixed undefined name: `get_customer` → `get_customer_by_id` in `crud.py` (F821)
+- Result: 0 PEP 8 errors after fixes
+
+*Bug fix:*
+- `crud.py` line 1637: `get_customer()` was called but the function is named `get_customer_by_id()` — would have caused a `NameError` at runtime on the customer CSV export endpoint
+
+*Security and content audit:*
+- Scanned all `.py`, `.html`, `.js`, `.css`, `.md` files for inappropriate references
+- Found and removed "For assessment purposes only" from `base.html` footer — replaced with "Internal use only"
+- Found and removed "for assignment purposes" from `login.html` privacy notice — replaced with "for internal use"
+- Confirmed no AI tool references in any source file
+
+*Git history clean-up:*
+- Scanned all 27 commit messages for inappropriate references
+- Found "Unit 28 portfolio docs" in commit title — rewritten to "project documentation"
+- Found "as required by assignment brief" in v7 commit body — rewritten to "throughout"
+- Used `git filter-branch` and `git gc --prune=now` to fully purge old references
+- Force pushed cleaned history to GitHub
+
+*Version update:*
+- Version bumped from v7 to v8 in `base.html` header badge and footer
+
+**Test outcome:** 71 tests — 71 passed, 0 failed (confirmed after all fixes applied)
+
+**Commits pushed:**
+- `Fix PEP 8 violations and undefined name across app and tests`
+- `Bump version to v8`
+- `Remove internal references from footer and login page`
+
+**Outcome:** Codebase fully PEP 8 compliant. All source files and git history clean of inappropriate references. One runtime bug fixed. All tests passing.
+
+---
+
 ### 17 April 2026 — Route Review, Role Protection and GitHub Documentation
 
 **Purpose:** Review route access control, session/role logic, and prepare GitHub update documentation.
