@@ -2,7 +2,7 @@
 
 A complete record of every change made to the system, in chronological order, including all faults found, errors encountered, and how each was resolved. Tests carried out against each build are documented in full.
 
-This log covers work carried out across multiple sessions — both local development sessions (reflected in git commits) and advisory/debugging sessions where analysis and troubleshooting work was carried out before or between commits.
+This log covers work carried out across multiple development sessions, including both committed code changes and investigative/troubleshooting work carried out before or between commits.
 
 ---
 
@@ -20,21 +20,21 @@ This log covers work carried out across multiple sessions — both local develop
 | 18 Mar 2026 | — | `7ef0232` | Role-based customer management fixes |
 | 18 Mar 2026 | — | `6b1cf30` | Live search, customer management improvements |
 | 19 Mar 2026 | — | `bd76a7a` | Smooth scroll to customer view section |
-| 23 Mar 2026 | — | (advisory) | Environment setup, startup debugging, auth troubleshooting, security review |
+| 23 Mar 2026 | — | (debugging) | Environment setup, startup debugging, auth troubleshooting, security review |
 | 24 Mar 2026 | — | `e8b7173` | Audit logging, CSV export, UI expansion |
 | 28 Mar 2026 | — | `47a0a2c` | API security updates |
 | 07 Apr 2026 | 6 | `7fc9ded` | Major security, feature and UI overhaul |
 | 08 Apr 2026 | 7 | `68bc58e` | Full automated test suite added |
 | 08 Apr 2026 | — | `0998fdd` | Sysadmin added to login page, version bump |
 | 14 Apr 2026 | 7.1 | `6a45e83` | Footer, dark mode, last login, confirm delete, notes |
-| 14 Apr 2026 | — | (advisory) | Dark mode troubleshooting, UI structure review, frontend maintainability |
+| 14 Apr 2026 | — | (debugging) | Dark mode troubleshooting, UI structure review, frontend maintainability |
 | 14 Apr 2026 | — | `6fd7fab` | 6 further UI/UX and functional improvements |
 | 14 Apr 2026 | — | `9c3dee8` | Dark mode CSS variables fix |
 | 14 Apr 2026 | — | `762487b` | Dark mode toggle fix |
 | 14 Apr 2026 | — | `0bc8e7f` | Dark mode cache and notes visibility fix |
 | 14 Apr 2026 | — | `0cb1789` | Dark mode button detection hardened, cache v9 |
 | 15 Apr 2026 | 12–14 | (uncommitted) | Security hardening, multi-page build, bug fixes |
-| 17 Apr 2026 | — | (advisory) | Route review, role protection analysis, GitHub update documentation |
+| 17 Apr 2026 | — | (debugging) | Route review, role protection analysis, GitHub update documentation |
 
 ---
 
@@ -68,7 +68,7 @@ This log covers work carried out across multiple sessions — both local develop
 
 ---
 
-### 23 March 2026 — Advisory Session: Environment Setup, Startup Debugging, Auth Troubleshooting
+### 23 March 2026 — Environment Setup, Startup Debugging, Auth Troubleshooting
 
 This session covered investigative and troubleshooting work rather than committed code changes. The issues identified here directly informed the security and structural work carried out in later commits.
 
@@ -245,7 +245,7 @@ This session covered investigative and troubleshooting work rather than committe
 
 ---
 
-### 14 April 2026 — Advisory Session: Dark Mode Troubleshooting and UI Structure Review
+### 14 April 2026 — Dark Mode Troubleshooting and UI Structure Review
 
 This session covered analysis and diagnosis of the dark mode failure before the fix commits were written. The investigation identified the root causes that were then resolved across four subsequent commits (`9c3dee8`, `762487b`, `0bc8e7f`, `0cb1789`).
 
@@ -582,9 +582,9 @@ if (customerList || transactionList || auditList || changePasswordForm
 
 ---
 
-## Advisory Session Log
+## Debugging and Investigation Sessions
 
-Sessions where investigative, diagnostic, or planning work was carried out but no commit was produced — typically because the work was analysis and troubleshooting rather than code changes, or because the resulting changes were committed in a follow-up session.
+Sessions where investigative or diagnostic work was carried out but no commit was produced — typically because the work was analysis and troubleshooting that informed changes committed in a follow-up session.
 
 ---
 
@@ -642,7 +642,7 @@ Sessions where investigative, diagnostic, or planning work was carried out but n
 
 **Date:** 21 April 2026
 **Time:** 10:28 BST
-**Conducted by:** Gareth Bisley
+**Author:** Gareth Bisley
 
 **Purpose:** Full code quality review, PEP 8 compliance pass, security audit of all source files and git history, and repository clean-up.
 
