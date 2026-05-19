@@ -163,6 +163,7 @@ _templates = Jinja2Templates(directory="app/templates")
 
 @app.exception_handler(404)
 async def not_found_handler(request: Request, _exc):
+    """Render the custom 404 page, passing the session user if present."""
     user = request.session.get("user")
     return _templates.TemplateResponse(
         request, "errors/404.html",
@@ -173,6 +174,7 @@ async def not_found_handler(request: Request, _exc):
 
 @app.exception_handler(403)
 async def forbidden_handler(request: Request, exc):
+    """Render the custom 403 page, passing the session user if present."""
     user = request.session.get("user")
     return _templates.TemplateResponse(
         request, "errors/403.html",

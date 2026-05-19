@@ -35,6 +35,7 @@ def _auth(request: Request):
 
 @router.get("/")
 def home(request: Request):
+    """Render the dashboard — redirect to login if not authenticated."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -46,6 +47,7 @@ def home(request: Request):
 
 @router.get("/dashboard")
 def dashboard(request: Request):
+    """Alias for / — renders the dashboard page."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -57,6 +59,7 @@ def dashboard(request: Request):
 
 @router.get("/login")
 def login_page(request: Request):
+    """Render the login page — redirect to dashboard if already logged in."""
     user = get_current_user(request)
     if user:
         return RedirectResponse(url="/", status_code=303)
@@ -69,6 +72,7 @@ def login_page(request: Request):
 
 @router.get("/customers")
 def customers_page(request: Request):
+    """Render the customer list page (all authenticated roles)."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -80,6 +84,7 @@ def customers_page(request: Request):
 
 @router.get("/transactions")
 def transactions_page(request: Request):
+    """Render the transaction history page (all authenticated roles)."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -91,6 +96,7 @@ def transactions_page(request: Request):
 
 @router.get("/audit")
 def audit_page(request: Request):
+    """Render the audit log page (all authenticated roles)."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -102,6 +108,7 @@ def audit_page(request: Request):
 
 @router.get("/staff")
 def staff_page(request: Request):
+    """Render the staff user list — manager and superadmin only."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -116,6 +123,7 @@ def staff_page(request: Request):
 
 @router.get("/reports")
 def reports_page(request: Request):
+    """Render the financial reports page — manager and superadmin only."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -130,6 +138,7 @@ def reports_page(request: Request):
 
 @router.get("/alerts")
 def alerts_page(request: Request):
+    """Render the risk alerts page — manager and superadmin only."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -144,6 +153,7 @@ def alerts_page(request: Request):
 
 @router.get("/settings")
 def settings_page(request: Request):
+    """Render the user settings and password change page."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -155,6 +165,7 @@ def settings_page(request: Request):
 
 @router.get("/help")
 def help_page(request: Request):
+    """Render the help page — accessible without authentication."""
     user = get_current_user(request)
     return templates.TemplateResponse(
         request, "help.html",
@@ -164,6 +175,7 @@ def help_page(request: Request):
 
 @router.get("/staff/{user_id}")
 def staff_profile_page(request: Request, user_id: int):
+    """Render an individual staff profile — manager and superadmin only."""
     user, redir = _auth(request)
     if redir:
         return redir
@@ -187,6 +199,7 @@ def staff_profile_page(request: Request, user_id: int):
 
 @router.get("/customers/{customer_id}")
 def customer_profile_page(request: Request, customer_id: int):
+    """Render an individual customer profile (all authenticated roles)."""
     user, redir = _auth(request)
     if redir:
         return redir
