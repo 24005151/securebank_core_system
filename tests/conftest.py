@@ -1,20 +1,20 @@
 """
 SecureBank — pytest fixtures shared across all test modules.
 
-I set the required environment variables before the app is imported
-so FastAPI and the session middleware start correctly without needing
-a real .env file present in the test environment.
+Sets required environment variables before the app is imported
+so FastAPI and the session middleware start correctly without a
+real .env file in the test environment.
 
 Test isolation strategy:
-    - I point DATABASE_URL at an in-memory SQLite instance so every
+    - DATABASE_URL points at an in-memory SQLite instance so every
       pytest session starts from a clean, seeded state.  Tests that
-      create customers with fixed email addresses will not collide
-      with data left over from previous runs.
-    - After the app is imported I disable the SlowAPI rate limiter so
-      that authentication tests (including the lockout scenario, which
-      sends many POST /api/auth/login requests) do not trip the
+      create customers with fixed email addresses won't collide with
+      data left over from previous runs.
+    - After import, the SlowAPI rate limiter is disabled so
+      authentication tests (including the lockout scenario, which
+      sends many POST /api/auth/login requests) don't trip the
       10-per-minute limit that is correct for production but would
-      cause spurious 429 errors during automated testing.
+      cause spurious 429 errors in automated testing.
     - Mutating tests use the X-API-Key header to bypass CSRF checks,
       which is the correct bypass path for non-browser API consumers.
     - Security tests deliberately send invalid / missing credentials to
@@ -67,8 +67,8 @@ app.state.limiter.enabled = False
 def client():
     """Return a TestClient that persists session cookies across requests.
 
-    I use scope='session' so the same client instance is reused for
-    every test in the session, avoiding repeated startup overhead.
+    Uses scope='session' so the same TestClient is reused for every
+    test, avoiding repeated startup overhead.
     """
     with TestClient(app, raise_server_exceptions=True) as c:
         yield c
@@ -84,10 +84,10 @@ def api_key():
 def api_headers(api_key):
     """Return request headers pre-loaded with the API key.
 
-    I use this on mutating requests in tests that are not specifically
-    testing session/CSRF behaviour.  The X-API-Key header bypasses the
-    CSRF double-submit check by design (API key callers do not use
-    cookies so CSRF does not apply to them).
+    Used on mutating requests in tests that aren't specifically
+    testing session/CSRF behaviour.  The X-API-Key header bypasses
+    the CSRF double-submit check by design (API key callers don't
+    use cookies so CSRF doesn't apply to them).
     """
     return {"X-API-Key": api_key}
 
@@ -96,10 +96,10 @@ def api_headers(api_key):
 def auth_client():
     """Return a dedicated TestClient logged in as 'admin' (manager role).
 
-    I use a separate TestClient instance — not the shared ``client`` —
-    so that security tests which call ``client.post('/api/auth/logout')``
-    do not accidentally log out this manager session.  The cookie jars
-    are independent.
+    Uses a separate TestClient — not the shared ``client`` — so
+    security tests that call ``client.post('/api/auth/logout')``
+    don't accidentally log out this manager session.  The cookie
+    jars are independent.
     """
     with TestClient(app, raise_server_exceptions=True) as c:
         response = c.post(

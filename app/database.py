@@ -1,15 +1,15 @@
 """
 SecureBank — database configuration.
 
-I set up the SQLAlchemy engine and session factory here.
+SQLAlchemy engine and session factory setup.
 SQLite is used for development. In production, swap
 DATABASE_URL for a PostgreSQL connection string and remove
 the ``check_same_thread`` connect argument.
 
 The DATABASE_URL environment variable overrides the default
-file path.  I use this in the test suite to point at an
-in-memory SQLite instance so tests never touch the real file
-and start from a clean state on every run.
+file path.  The test suite uses this to point at an in-memory
+SQLite instance so tests never touch the real database and
+always start from a clean state.
 """
 
 import os
@@ -33,8 +33,8 @@ engine = create_engine(
     **({"poolclass": StaticPool} if _is_memory else {})
 )
 
-# autocommit=False means I always call db.commit() explicitly,
-# giving me full control over transaction boundaries.
+# autocommit=False: db.commit() is always called explicitly,
+# giving full control over transaction boundaries.
 # autoflush=False prevents implicit flushes before queries.
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -50,9 +50,8 @@ Base = declarative_base()
 def get_db():
     """Yield a database session and close it after the request.
 
-    I use this as a FastAPI dependency so each request gets
-    its own isolated session that is always cleaned up, even
-    if an exception is raised inside the route handler.
+    FastAPI dependency — each request gets its own isolated
+    session that is always closed, even if the route raises.
     """
     db = SessionLocal()
     try:

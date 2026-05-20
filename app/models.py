@@ -1,7 +1,7 @@
 """
 SecureBank — SQLAlchemy ORM models.
 
-I define the four core database tables here:
+The four core database tables:
 
 * ``StaffUser``   — internal staff accounts with role-based
   access control and account-lockout tracking.
@@ -34,9 +34,9 @@ from app.database import Base
 def _now():
     """Return the current UTC datetime as a timezone-aware value.
 
-    I use this helper instead of ``datetime.utcnow`` because
-    ``utcnow`` is deprecated in Python 3.12+ and returns a
-    naive datetime that has no timezone information attached.
+    Preferred over ``datetime.utcnow`` because ``utcnow`` is
+    deprecated in Python 3.12+ and returns a naive datetime
+    with no timezone information.
     """
     return datetime.now(timezone.utc)
 
@@ -106,8 +106,8 @@ class StaffUser(Base):
 class Customer(Base):
     """Represents a bank customer and their account.
 
-    I store balances as integers (pence) to avoid floating-
-    point rounding errors that would occur with floats.
+    Balances are stored as integers (pence) to avoid floating-
+    point rounding errors.
     The ``is_active`` flag controls whether the account can
     send or receive money — inactive accounts are rejected
     by all transaction endpoints.
@@ -228,7 +228,7 @@ class Transaction(Base):
 class AuditLog(Base):
     """Immutable record of every significant system event.
 
-    I write an audit entry for every mutating operation:
+    An audit entry is written for every mutating operation:
     logins (success and failure), customer changes,
     transactions, staff management, and CSV exports.
 

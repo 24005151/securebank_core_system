@@ -1,7 +1,7 @@
 """
 SecureBank — test suite.
 
-I organise tests by area:
+Tests are organised by area:
     conftest.py          — shared fixtures (client, auth helpers)
     test_health.py       — health endpoint and system availability
     test_auth.py         — login, lockout, session, CSRF

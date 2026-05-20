@@ -1,7 +1,7 @@
 """
 SecureBank — health endpoint and availability tests.
 
-I verify that the application is reachable, the health endpoint
+Checks that the application is reachable, the health endpoint
 returns the expected structure, and the login page is served
 correctly to unauthenticated users.
 

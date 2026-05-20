@@ -1,8 +1,10 @@
 """
 SecureBank — authentication and authorisation dependencies.
 
-I define three FastAPI dependency functions here that protect
-API endpoints at different privilege levels:
+Authentication and authorisation dependency functions.
+
+Three FastAPI dependencies protect API endpoints at different
+privilege levels:
 
 * ``require_session_or_api_key``    — any authenticated user.
 * ``require_manager_or_api_key``    — manager or superadmin.
@@ -11,15 +13,15 @@ API endpoints at different privilege levels:
 Each dependency accepts either a valid session cookie or an
 ``X-API-Key`` header.  Session users are re-validated against
 the database on every request so that newly locked accounts
-are rejected immediately without waiting for their session to
+are rejected immediately without waiting for the session to
 expire.
 
-CSRF protection uses a double-submit token pattern: I store a
-secret in the session on login and require the client to echo
-it back as the ``X-CSRF-Token`` request header on every
-mutating (POST/PUT/PATCH/DELETE) request.  API-key-
-authenticated requests are exempt because they do not rely on
-cookies and therefore are not vulnerable to CSRF.
+CSRF protection uses a double-submit token pattern: a secret
+is stored in the session on login and the client must echo it
+back as the ``X-CSRF-Token`` header on every mutating
+(POST/PUT/PATCH/DELETE) request.  API-key-authenticated
+requests are exempt because they don't use cookies and are
+not vulnerable to CSRF.
 """
 
 import hmac
@@ -36,15 +38,15 @@ from app.database import get_db
 API_KEY = os.environ.get("API_KEY", "")
 API_KEY_HEADER_NAME = "X-API-Key"
 
-# Roles with manager-level access.  I treat superadmin as a
-# strict superset of manager, so both pass manager checks.
+# Roles with manager-level access.  Superadmin is treated as
+# a strict superset of manager, so both pass manager checks.
 PRIVILEGED_ROLES = {"manager", "superadmin"}
 
 
 def _key_matches(provided: str | None) -> bool:
     """Return True if ``provided`` matches the configured API key.
 
-    I use ``hmac.compare_digest`` for a constant-time comparison
+    Uses ``hmac.compare_digest`` for a constant-time comparison
     that prevents timing attacks from distinguishing a wrong key
     from no key at all.
     """
@@ -60,10 +62,9 @@ def _validate_session_user(
 ) -> dict | None:
     """Return the session user dict if the account is valid.
 
-    I re-query the database on every authenticated request so
-    that an account which has been locked since the session was
-    created is immediately ejected.  The session is cleared so
-    the next request is redirected to the login page.
+    Re-queries the database on every authenticated request so
+    an account locked since login is immediately ejected.
+    The session is cleared on ejection.
 
     Returns:
         The session user dict, or None if unauthenticated or
@@ -91,7 +92,7 @@ def _validate_session_user(
 def generate_csrf_token(request: Request) -> str:
     """Generate or retrieve the CSRF token for this session.
 
-    I create the token on first call and store it in the
+    Creates the token on first call and stores it in the
     session so the same value is returned on subsequent calls.
     A fresh token is issued on every login.
     """
@@ -106,9 +107,9 @@ def require_csrf_token(
 ):
     """Validate the CSRF token on mutating session requests.
 
-    I skip validation when the request is authenticated via
-    API key because API key requests do not use session cookies
-    and are therefore not vulnerable to CSRF.
+    Skips validation when the request is authenticated via API
+    key — those requests don't use cookies so CSRF doesn't
+    apply.
 
     Raises:
         HTTPException 403 if the token is missing or wrong.
@@ -141,8 +142,8 @@ def require_session_or_api_key(
 ):
     """Require any valid authentication — session or API key.
 
-    I accept staff sessions (any role) and the shared API key.
-    Use this on endpoints that any authenticated user may call.
+    Accepts staff sessions (any role) and the shared API key.
+    Use on endpoints that any authenticated user may call.
 
     Returns:
         Dict with ``auth_type`` ('session' or 'api_key') and
@@ -177,9 +178,9 @@ def require_manager_or_api_key(
 ):
     """Require manager/superadmin role or a valid API key.
 
-    I gate access to sensitive operations (customer edits,
-    staff management, audit logs, CSV export) with this
-    dependency.  Staff-role sessions are rejected.
+    Guards sensitive operations (customer edits, staff
+    management, audit logs, CSV export).  Staff-role sessions
+    are rejected.
 
     Returns:
         Dict with ``auth_type`` and ``user`` (same as above).
@@ -210,9 +211,9 @@ def require_superadmin_or_api_key(
 ):
     """Restrict to superadmin role or a valid API key.
 
-    I use this for operations that affect privileged accounts,
-    such as unlocking another manager or superadmin.  Regular
-    manager sessions are rejected by this dependency.
+    For operations that affect privileged accounts, such as
+    unlocking another manager or superadmin.  Regular manager
+    sessions are rejected.
 
     Returns:
         Dict with ``auth_type`` and ``user``.

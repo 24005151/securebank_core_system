@@ -1,7 +1,7 @@
 """
 SecureBank — financial transaction tests.
 
-I verify:
+Tests cover:
     - Deposits credit the account balance correctly.
     - Withdrawals debit the account balance correctly.
     - Transfers move funds between two accounts atomically.
@@ -29,7 +29,7 @@ import pytest
 def test_account(client, api_headers):
     """Create a dedicated test customer with £5,000 opening balance.
 
-    I use scope='module' so the same account is reused across all
+    Uses scope='module' so the same account is reused across all
     transaction tests in this file, avoiding repeated API calls.
     """
     response = client.post(

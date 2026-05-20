@@ -1,8 +1,7 @@
 """
 SecureBank — FastAPI application entry point.
 
-I create and configure the FastAPI application here in five
-steps:
+The app is configured in five steps:
 
 1. Load environment variables from ``.env`` via load_dotenv.
 2. Create all database tables through Base.metadata.create_all.
@@ -70,7 +69,7 @@ app.add_exception_handler(
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security response headers to every HTTP response.
 
-    I inject the following headers on every response:
+    The following headers are injected on every response:
 
     Content-Security-Policy
         Restricts which origins scripts, styles, images, and

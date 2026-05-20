@@ -1,7 +1,7 @@
 """
 SecureBank — customer CRUD operation tests.
 
-I verify:
+Tests cover:
     - Customer list returns correctly structured data.
     - Search/filter parameters work as expected.
     - A customer can be created, updated, deactivated, and reactivated.

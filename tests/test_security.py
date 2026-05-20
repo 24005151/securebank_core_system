@@ -1,7 +1,7 @@
 """
 SecureBank — security header and access-control tests.
 
-I verify:
+Tests cover:
     - All required security response headers are present and correct.
     - Unauthenticated requests to protected endpoints return 401/403.
     - Staff-role users cannot access manager-only endpoints (403).

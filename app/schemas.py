@@ -1,7 +1,7 @@
 """
 SecureBank — Pydantic request and response schemas.
 
-I define all the data shapes that cross the API boundary here.
+Pydantic request and response schemas for all API endpoints.
 Request schemas validate and sanitise incoming JSON payloads.
 Response schemas serialise ORM objects into JSON, hiding
 fields that should not be exposed (e.g. hashed passwords).
@@ -31,9 +31,9 @@ class LoginRequest(BaseModel):
 class CustomerCreate(BaseModel):
     """Payload for creating a new customer record.
 
-    I require at least two whitespace-separated words in
-    ``full_name`` so that staff always enter a proper name
-    rather than a single word or an account alias.
+    Requires at least two whitespace-separated words in
+    ``full_name`` so staff always enter a proper name rather
+    than a single word or alias.
     """
 
     full_name: str = Field(..., min_length=2, max_length=100)
@@ -56,9 +56,9 @@ class CustomerCreate(BaseModel):
 class CustomerUpdate(BaseModel):
     """Payload for editing an existing customer's details.
 
-    I only allow name and email to be changed here.  Balance
-    is modified exclusively through the transaction endpoints
-    so there is always a transaction record and audit trail.
+    Only name and email can be changed here.  Balance is
+    modified exclusively through transaction endpoints so there
+    is always a transaction record and audit trail.
     """
 
     full_name: str = Field(..., min_length=2, max_length=100)
@@ -162,8 +162,8 @@ class DashboardSummaryResponse(BaseModel):
 class CustomerTimelineItem(BaseModel):
     """Single entry in a customer's activity timeline.
 
-    I build the timeline from the customer's creation record
-    and all of their linked transactions, sorted newest first.
+    Built from the customer's creation record and all linked
+    transactions, sorted newest first.
     """
 
     event_type: str
@@ -174,8 +174,8 @@ class CustomerTimelineItem(BaseModel):
 class StaffUserResponse(BaseModel):
     """Shape of a staff user record returned by the API.
 
-    I deliberately exclude the ``password`` field so the
-    hashed password is never sent over the wire.
+    Deliberately excludes the ``password`` field so the hashed
+    password is never sent over the wire.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -233,8 +233,8 @@ class StaffUserCreate(BaseModel):
 class PasswordChangeRequest(BaseModel):
     """Payload for changing a staff user's password.
 
-    I require the current password to prevent an attacker
-    with a stolen session from locking out the real user.
+    Requires the current password to prevent an attacker with
+    a stolen session from locking out the real user.
     Additional strength rules are enforced in crud.py.
     """
 

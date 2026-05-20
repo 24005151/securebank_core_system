@@ -1,7 +1,7 @@
 """
 SecureBank — authentication tests.
 
-I verify:
+Tests cover:
     - Successful login stores the correct role and flags in the session.
     - Failed logins return a generic error (no username enumeration).
     - Accounts lock after MAX_FAILED_LOGIN_ATTEMPTS failures.
@@ -105,8 +105,8 @@ def test_empty_credentials_rejected(client):
 def test_account_locks_after_failures(client):
     """Account must lock after 3 consecutive failed login attempts (R002).
 
-    I use staff1 for this test because it is a low-privilege account
-    and locking it does not affect other tests that require admin access.
+    Uses staff1 because it is a low-privilege account and locking
+    it does not affect other tests that require admin access.
     Note: this test may fail if staff1 is already locked from a previous
     run — reset via the unlock endpoint or restart the database.
     """

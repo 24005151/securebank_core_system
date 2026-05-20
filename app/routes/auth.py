@@ -1,7 +1,7 @@
 """
 SecureBank — authentication endpoints.
 
-I define four endpoints here:
+Authentication endpoints:
 
 POST /api/auth/login     — validate credentials, create a
                            session, issue a CSRF token.
@@ -36,15 +36,15 @@ def login(
 ):
     """Authenticate a staff user and establish a session.
 
-    On success I store the user's ID, username, role, and
-    must_change_password flag in the session, then issue a
+    On success, stores the user's ID, username, role, and
+    must_change_password flag in the session, then issues a
     fresh CSRF token.
 
     The rate limit of 10 attempts per minute per IP is applied
     by SlowAPI before any database work is done.
 
-    I return the same response shape regardless of whether the
-    failure is "wrong password" or "account locked" to prevent
+    Returns the same response shape regardless of whether the
+    failure is "wrong password" or "account locked", to prevent
     username enumeration.
     """
     ip_address = get_client_ip(request)
@@ -68,10 +68,10 @@ def login(
             detail=error or "Invalid username or password."
         )
 
-    # Store the minimum necessary data in the session.  The
-    # user ID is needed by the password-change endpoint to
-    # verify ownership.  last_login_at is stored as an ISO
-    # string so it survives JSON session serialisation.
+    # Store the minimum needed in the session.  The user ID is
+    # needed by the password-change endpoint to verify ownership.
+    # last_login_at is stored as ISO so it survives JSON
+    # session serialisation.
     request.session["user"] = {
         "id": user.id,
         "username": user.username,
@@ -109,7 +109,7 @@ def login(
 def logout(request: Request):
     """Clear the current session.
 
-    I discard all session data including the CSRF token.
+    Clears all session data including the CSRF token.
     The client-side JavaScript then redirects to /login.
     """
     request.session.clear()
@@ -120,9 +120,9 @@ def logout(request: Request):
 def current_user(request: Request):
     """Return the current session user dict.
 
-    I use this on page load in app.js to populate the
-    role-dependent UI (e.g. showing or hiding manager controls)
-    without an extra server-side template variable.
+    Called on page load in app.js to populate role-dependent UI
+    (e.g. showing or hiding manager controls) without an extra
+    server-side template variable.
 
     Raises:
         HTTPException 401 if there is no active session.
@@ -139,9 +139,9 @@ def current_user(request: Request):
 def get_csrf_token(request: Request):
     """Return the CSRF token for the current session.
 
-    I call this once on page load from app.js.  The returned
-    token is stored in a module-level variable and injected
-    into the X-CSRF-Token header on every mutating fetch call
-    via the global fetch wrapper.
+    Called once on page load from app.js.  The token is stored
+    in a module-level variable and injected into the
+    X-CSRF-Token header on every mutating fetch call via the
+    global fetch wrapper.
     """
     return {"csrf_token": generate_csrf_token(request)}

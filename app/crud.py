@@ -1,7 +1,7 @@
 """
 SecureBank — database operations (CRUD layer).
 
-I keep all direct database interactions in this module so the
+All direct database interactions go through this module so
 route handlers stay thin and easy to test.  Every function
 that changes data also writes an audit log entry.
 
@@ -28,9 +28,9 @@ from passlib.context import CryptContext
 
 from app import models, schemas
 
-# I use pbkdf2_sha256 as the hashing scheme.  passlib will
-# automatically re-hash on verify if a stronger scheme is
-# configured in future (deprecated="auto").
+# pbkdf2_sha256 is the hashing scheme.  passlib will re-hash
+# automatically on verify if a stronger scheme is added
+# later (deprecated="auto").
 pwd_context = CryptContext(
     schemes=["pbkdf2_sha256"], deprecated="auto"
 )
@@ -67,8 +67,8 @@ def validate_password_strength(
 ) -> tuple[bool, str | None]:
     """Check that ``password`` meets the strength requirements.
 
-    I require at least 8 characters with at least one uppercase
-    letter, one lowercase letter, and one digit.
+    Requires at least 8 characters, one uppercase letter, one
+    lowercase letter, and one digit.
 
     Returns:
         A (True, None) tuple on success, or (False, message)
@@ -107,8 +107,8 @@ def create_audit_log(
 ):
     """Write an immutable audit log entry to the database.
 
-    I call this function at the end of every mutating operation
-    so there is always a complete trail of who did what and when.
+    Called at the end of every mutating operation so there is
+    always a full trail of who did what and when.
 
     Args:
         db:         Active database session.
@@ -141,8 +141,8 @@ def create_audit_log(
 def seed_default_staff_user(db: Session):
     """Create the four demo staff accounts on first startup.
 
-    I only insert each account when it does not already exist,
-    so this function is safe to call on every application boot.
+    Only inserts each account when it does not already exist,
+    so safe to call on every application boot.
 
     Demo accounts:
         admin    — manager,    must change password on first login
@@ -252,9 +252,9 @@ def unlock_staff_user(
 ):
     """Unlock a staff account that has been locked by failed logins.
 
-    I enforce a role hierarchy rule: manager and superadmin
-    accounts may only be unlocked by a superadmin.  Regular
-    staff accounts can be unlocked by any manager or superadmin.
+    Enforces role hierarchy: manager and superadmin accounts
+    can only be unlocked by a superadmin.  Regular staff can
+    be unlocked by any manager or superadmin.
 
     Args:
         db:          Active database session.
@@ -304,7 +304,7 @@ def create_staff_user(
 ):
     """Create a new staff user account.
 
-    I validate password strength before hashing.  All new
+    Validates password strength before hashing.  All new
     accounts are created with ``must_change_password=True``
     so the user is prompted to set their own password on first
     login.
@@ -355,9 +355,9 @@ def change_staff_password(
 ):
     """Change a staff user's password.
 
-    I verify the current password, enforce strength rules, and
-    require the new password to differ from the current one.
-    On success I clear the ``must_change_password`` flag so
+    Verifies the current password, enforces strength rules, and
+    requires the new password to differ from the current one.
+    On success clears the ``must_change_password`` flag so
     the user is no longer redirected to the change form.
 
     Returns:
@@ -403,7 +403,7 @@ def change_staff_password(
 def generate_unique_account_number(db: Session) -> str:
     """Generate a unique SB-prefixed account number.
 
-    I loop until I find a number that does not already exist in
+    Loops until finding a number that does not already exist in
     the database.  The 8-digit random component gives 90 million
     possible values so collisions are extremely rare in practice.
     """
@@ -419,9 +419,9 @@ def generate_unique_account_number(db: Session) -> str:
 def seed_demo_customers_bulk(db: Session):
     """Populate the database with demo customers and transactions.
 
-    I only run when the customers table is completely empty.
-    This gives a realistic starting dataset for demonstration
-    and development without requiring manual data entry.
+    Only runs when the customers table is completely empty.
+    Gives a realistic starting dataset for demonstration and
+    development without requiring manual data entry.
     Ten customers are created, eight of whom receive demo
     transactions that adjust their balances accordingly.
     """
@@ -590,13 +590,13 @@ def authenticate_staff_user(
 ):
     """Verify login credentials and return the staff user.
 
-    I increment the failed-attempt counter on every wrong
-    password and lock the account when the threshold is reached.
+    Increments the failed-attempt counter on every wrong
+    password and locks the account when the threshold is reached.
 
-    I return the same generic error message for "user not found"
-    and "account locked" to prevent username enumeration — an
-    attacker should not be able to confirm whether a username
-    exists by observing the error message.
+    Returns the same generic error for "user not found" and
+    "account locked" to prevent username enumeration — an
+    attacker cannot confirm whether a username exists from the
+    error message alone.
 
     Returns:
         (user, None) on success, or (None, error_message).
@@ -644,9 +644,9 @@ def authenticate_staff_user(
 def get_dashboard_summary(db: Session):
     """Return aggregate statistics for the dashboard metric cards.
 
-    I run all seven counts in a single database round-trip
-    (separate scalar queries) and return them as a dict that
-    maps directly to the DashboardSummaryResponse schema.
+    Runs all seven counts in a single database round-trip
+    (separate scalar queries) and returns them as a dict
+    that maps to the DashboardSummaryResponse schema.
     """
     total_customers = (
         db.query(func.count(models.Customer.id)).scalar() or 0
@@ -964,8 +964,8 @@ def create_customer(
 ):
     """Create a new customer record and write an audit log.
 
-    I normalise the email to lowercase and strip whitespace from
-    both name and email before saving.  The account number is
+    Normalises the email to lowercase and strips whitespace from
+    name and email before saving.  The account number is
     generated by ``generate_unique_account_number``.
 
     Returns:
@@ -1005,10 +1005,9 @@ def update_customer(
 ):
     """Update a customer's name and email address.
 
-    I check for email uniqueness before saving so that the error
-    is surfaced before any data is changed.  The old name and
-    email are captured and included in the audit log so there is
-    a full history of what changed.
+    Checks email uniqueness before saving so the error surfaces
+    before any data changes.  Old name and email are captured
+    for the audit log so there is a full history of changes.
 
     Returns:
         (customer, None) on success, or (None, error_message).
@@ -1062,7 +1061,7 @@ def deactivate_customer(
 ):
     """Set a customer account to inactive.
 
-    Inactive accounts cannot send or receive money.  I guard
+    Inactive accounts cannot send or receive money.  Guarded
     against double-deactivation to keep the audit log clean.
 
     Returns:
@@ -1137,7 +1136,7 @@ def delete_customer(
 ):
     """Permanently delete a customer record from the database.
 
-    I capture the name and account number before deletion so
+    Captures the name and account number before deletion so
     they can be included in the audit log entry (the ORM object
     is gone after ``db.delete``).
 
@@ -1306,9 +1305,9 @@ def get_all_audit_logs(
 def get_customer_timeline(db: Session, customer_id: int):
     """Build a chronological activity timeline for a customer.
 
-    I combine the customer's creation event with all of their
-    transactions (up to 200) and sort the result newest-first.
-    The timeline is used in the customer detail panel in the UI.
+    Combines the customer's creation event with all of their
+    transactions (up to 200) and sorts newest-first.  Used in
+    the customer detail panel in the UI.
 
     Returns:
         List of dicts with 'event_type', 'description', and
@@ -1364,9 +1363,9 @@ def deposit_money(
 ):
     """Credit an amount to a customer's account.
 
-    I automatically set ``risk_flag=True`` when the amount meets
+    Automatically sets ``risk_flag=True`` when the amount meets
     or exceeds ``SUSPICIOUS_TRANSACTION_THRESHOLD``.  The flag
-    appears in the audit log detail as a visual warning.
+    appears in the alerts page as a visual warning.
 
     Returns:
         (transaction, None) on success, or (None, error_message).
@@ -1417,7 +1416,7 @@ def withdraw_money(
 ):
     """Debit an amount from a customer's account.
 
-    I check for sufficient funds before proceeding so the
+    Checks for sufficient funds before proceeding so the
     balance can never go negative.
 
     Returns:
@@ -1472,9 +1471,9 @@ def transfer_money(
 ):
     """Move funds from one customer account to another.
 
-    I validate both accounts, check sufficient funds, and then
-    update both balances and create a single transaction record
-    in one commit so the operation is effectively atomic.
+    Validates both accounts, checks sufficient funds, then
+    updates both balances and creates a single transaction
+    record in one commit so the operation is effectively atomic.
 
     Note: SQLite does not support ``SELECT FOR UPDATE`` row
     locking, so two simultaneous withdrawals from the same
@@ -1553,9 +1552,9 @@ def export_customers_csv(
 ) -> str:
     """Return all customer records serialised as a CSV string.
 
-    I fetch up to 10 000 records and write an audit log entry
-    so that every export is traceable.  The CSV uses the Python
-    ``csv`` module to handle quoting and escaping automatically.
+    Fetches up to 10 000 records and writes an audit log entry
+    so every export is traceable.  The Python ``csv`` module
+    handles quoting and escaping automatically.
 
     Returns:
         CSV text as a string (no BOM, Unix line endings).
@@ -1589,7 +1588,7 @@ def export_transactions_csv(
 ) -> str:
     """Return all transaction records serialised as a CSV string.
 
-    I fetch up to 10 000 records and write an audit log entry.
+    Fetches up to 10 000 records and writes an audit log entry.
 
     Returns:
         CSV text as a string.
@@ -1690,13 +1689,13 @@ def purge_audit_logs(
 ) -> int:
     """Delete audit log entries older than ``days`` days.
 
-    I perform a bulk delete rather than loading objects into
+    Performs a bulk delete rather than loading objects into
     memory, using ``synchronize_session=False`` to skip the
-    SQLAlchemy in-memory session sync (safe here because we
-    commit immediately and do not use the deleted objects).
+    SQLAlchemy in-memory sync (safe here because we commit
+    immediately and don't use the deleted objects afterwards).
 
-    After deletion I write a new audit entry recording how many
-    records were purged and who requested it.
+    After deletion a new audit entry is written recording how
+    many records were purged and who requested it.
 
     Args:
         db:         Active database session.
