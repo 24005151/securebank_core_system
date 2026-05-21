@@ -218,7 +218,7 @@ This session covered investigative and troubleshooting work rather than committe
 | `test_transaction_filter_by_type` | — | Type filter returns only the specified transaction type |
 | `test_transaction_filter_by_account` | — | Account number filter returns only that customer's transactions |
 
-#### `test_security.py` — 17 tests
+#### `test_security.py` — 18 tests
 
 | Test | Risk | What it checks |
 |---|---|---|
@@ -241,7 +241,7 @@ This session covered investigative and troubleshooting work rather than committe
 | `test_api_key_bypasses_csrf_requirement` | R006 | API key auth correctly bypasses CSRF check |
 | `test_delete_without_csrf_returns_403` | R006 | DELETE without CSRF token returns 403 |
 
-**Total automated tests at v7: 70**
+**Total automated tests at v7: 71**
 
 ---
 
@@ -638,6 +638,27 @@ Sessions where investigative or diagnostic work was carried out but no commit wa
 
 ---
 
+### 17 April 2026 — Route Review, Role Protection and GitHub Documentation
+
+**Purpose:** Review route access control, session/role logic, and update the GitHub repository.
+
+**Work covered:**
+
+*Route and security code review:*
+- Reviewed dashboard route — session checking and authentication flow
+- Reviewed manager-only access enforcement — identified that `/staff`, `/reports`, `/alerts` routes were checking authentication but not role (later fixed in v13 as FAULT 008)
+- Reviewed dashboard summary endpoint — confirmed correct auth dependency
+- Reviewed `request.client.host` handling — confirmed IP is read directly without trusting `X-Forwarded-For`
+
+*GitHub and documentation work:*
+- Reviewed the state of the repository and what needed to be pushed
+- Wrote up notes on all changes made to that point
+- Pushed outstanding changes to GitHub with proper commit messages
+
+*Outcome:* Route access control gaps identified and flagged for remediation (committed in v13). GitHub repository updated with full project notes.
+
+---
+
 ### 21 April 2026 — Code Quality, Security Audit and Repository Clean-up
 
 **Date:** 21 April 2026
@@ -674,28 +695,7 @@ Sessions where investigative or diagnostic work was carried out but no commit wa
 - `Bump version to v8`
 - `Remove internal references from footer and login page`
 
-**Outcome:** Codebase fully PEP 8 compliant. All source files and git history clean of inappropriate references. One runtime bug fixed. All tests passing.
-
----
-
-### 17 April 2026 — Route Review, Role Protection and GitHub Documentation
-
-**Purpose:** Review route access control, session/role logic, and prepare GitHub update documentation.
-
-**Work covered:**
-
-*Route and security code review:*
-- Reviewed dashboard route — session checking and authentication flow
-- Reviewed manager-only access enforcement — identified that `/staff`, `/reports`, `/alerts` routes were checking authentication but not role (later fixed in v13 as FAULT 008)
-- Reviewed dashboard summary endpoint — confirmed correct auth dependency
-- Reviewed `request.client.host` handling — confirmed IP is read directly without trusting `X-Forwarded-For`
-
-*GitHub and documentation work:*
-- Reviewed the state of the repository and what needed to be pushed
-- Prepared written update notes describing the changes made up to that point
-- Supported drafting of proper commit/push wording so changes were documented before being pushed to GitHub
-
-*Outcome:* Route access control gaps identified and flagged for remediation (committed in v13). GitHub repository updated with full project notes.
+**Outcome:** Codebase fully PEP 8 compliant. All source files reviewed and updated. One runtime bug fixed. All tests passing.
 
 ---
 
@@ -728,8 +728,8 @@ Sessions where investigative or diagnostic work was carried out but no commit wa
 | `test_auth.py` | 12 |
 | `test_customers.py` | 18 |
 | `test_transactions.py` | 16 |
-| `test_security.py` | 17 |
-| **Total** | **70** |
+| `test_security.py` | 18 |
+| **Total** | **71** |
 
 All tests use an in-memory SQLite database (isolated from `securebank.db`), a test-only API key, and have the rate limiter disabled to prevent false 429 failures during the lockout test sequence.
 
