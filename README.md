@@ -1,6 +1,8 @@
 # SecureBank Core System
 
-A secure banking operations web application built with **FastAPI**, **SQLAlchemy**, **SQLite**, and **HTML/CSS/JavaScript**. Designed for internal staff use, the system manages customer accounts, financial transactions, and staff access control with full audit logging and role-based access control.
+**Author:** G Bisley
+
+A secure banking operations web application built with **FastAPI**, **SQLAlchemy**, **SQLite**, and **HTML/CSS/JavaScript**. Built for internal staff use to manage customer accounts, process transactions, and control staff access, with a full audit log and role-based permissions.
 
 ---
 
@@ -25,7 +27,7 @@ A secure banking operations web application built with **FastAPI**, **SQLAlchemy
 ## Security
 
 - API key and session secret loaded from `.env` (never hardcoded in source)
-- CSRF double-submit token protection on all mutating endpoints (POST, PUT, PATCH, DELETE)
+- CSRF token protection on all mutating endpoints (POST, PUT, PATCH, DELETE)
 - Account lockout after 3 consecutive failed login attempts
 - Rate-limited login — 10 attempts per minute per IP address
 - Security response headers on every request:
@@ -34,10 +36,10 @@ A secure banking operations web application built with **FastAPI**, **SQLAlchemy
   - `X-Content-Type-Options: nosniff`
   - `Referrer-Policy: strict-origin-when-cross-origin`
   - `X-XSS-Protection: 1; mode=block`
-- Per-request session re-validation — locked accounts are ejected immediately
-- Timing-safe credential comparison to prevent timing attacks
-- Role hierarchy enforcement — only superadmin can unlock manager and superadmin accounts
-- Input validation on all create and update operations via Pydantic schemas
+- Session checked on every request — locked accounts are signed out immediately
+- Constant-time password comparison to prevent timing attacks
+- Only superadmin can unlock manager and superadmin accounts
+- Input validation on all create and update operations
 
 ---
 
@@ -98,6 +100,8 @@ uvicorn app.main:app --reload
 
 **7. Open in browser:** [http://localhost:8000](http://localhost:8000)
 
+To stop the server press `Ctrl+C` in the terminal. To deactivate the virtual environment run `deactivate`.
+
 ---
 
 ### macOS
@@ -149,6 +153,8 @@ uvicorn app.main:app --reload
 ```
 
 **7. Open in browser:** [http://localhost:8000](http://localhost:8000)
+
+To stop the server press `Ctrl+C` in the terminal. To deactivate the virtual environment run `deactivate`.
 
 ---
 
@@ -210,6 +216,8 @@ uvicorn app.main:app --reload
 
 **7. Open in browser:** [http://localhost:8000](http://localhost:8000)
 
+To stop the server press `Ctrl+C` in the terminal. To deactivate the virtual environment run `deactivate`.
+
 ---
 
 ## Environment Variables
@@ -253,13 +261,12 @@ pytest tests/test_security.py -v
 
 | Test Module | Tests | Coverage |
 |---|---|---|
-| `test_auth.py` | 14 | Login, logout, lockout, session management |
-| `test_security.py` | 12 | Headers, CSRF, role-based access, privilege escalation |
-| `test_transactions.py` | 20 | Deposit, withdraw, transfer, risk flagging, inactive accounts |
-| `test_customers.py` | 14 | CRUD, input validation, duplicate detection |
-| `test_audit.py` | 8 | Audit log creation on all mutating operations |
-| `test_pages.py` | 4 | Page routes, role-gated access |
-| **Total** | **72** | |
+| `test_health.py` | 7 | App availability, static files, login page |
+| `test_auth.py` | 12 | Login, logout, lockout, session management |
+| `test_security.py` | 18 | Headers, CSRF, role-based access, privilege escalation |
+| `test_transactions.py` | 16 | Deposit, withdraw, transfer, risk flagging, inactive accounts |
+| `test_customers.py` | 18 | CRUD, input validation, duplicate detection |
+| **Total** | **71** | |
 
 ---
 
@@ -327,7 +334,7 @@ PROJECT_LOG.md            # Full development log including faults and resolution
 ## Known Limitations
 
 - **SQLite race condition** — balance updates are not row-locked; use PostgreSQL with `SELECT FOR UPDATE` in production
-- **No HTTPS in development** — set `HTTPS_ONLY=true` and deploy behind a TLS-terminating reverse proxy for production use
+- **No HTTPS in development** — set `HTTPS_ONLY=true` and run behind an HTTPS-enabled proxy for production use
 - **No password reset flow** — forgotten passwords require a superadmin to reset via the staff management page
 - **Audit log retention** — use `DELETE /api/audit-logs?days=N` (manager/superadmin only) to manage retention periods
 - **Flat role model** — all staff can see all customers; no per-customer or team-based access scoping
